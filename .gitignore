@@ -9,3 +9,5 @@ __pycache__/
 build/
 dist/
 src/siglent_spd3000/_build_commit.py
+gateway-settings.toml
+gateway-auth.toml

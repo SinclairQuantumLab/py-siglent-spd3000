@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import socket
 
+from .._constants import DEFAULT_SCPI_PORT
 from ..exceptions import SPD3000ConnectionError, SPD3000ProtocolError, SPD3000TimeoutError
 
 
@@ -14,7 +15,7 @@ class SocketTransport:
         self,
         host: str,
         *,
-        port: int = 5025,
+        port: int = DEFAULT_SCPI_PORT,
         timeout: float = 5.0,
         max_response_bytes: int = 1024 * 1024,
     ) -> None:

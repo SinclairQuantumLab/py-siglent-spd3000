@@ -103,10 +103,17 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "git rev-parse HEAD" in readme
     assert "> **NOTE:** `uv` is optional" in readme
     assert "uv sync --extra gateway --no-dev" in readme
+    assert "gateway-settings.toml.template" in readme
+    assert "gateway-auth.toml.template" in readme
+    assert "spd3000 gateway init" in readme
     assert "### Start the gateway" in readme
     assert "### Connect a client" in readme
+    assert "### Ports and firewall" in readme
     assert "<GATEWAY_HOST>" in readme
-    assert "`localhost` means “this same computer”" in readme
-    assert "spd3000 gateway serve --socket" in readme
+    assert "`localhost` means the gateway accepts clients only from that same computer" in readme
+    assert "spd3000 gateway serve" in readme
+    assert "--gateway-auth gateway-auth.toml" in readme
+    assert "TCP port 8765" in readme
+    assert "TCP 5025" in readme
     assert "connection=spd.ConnectionType.GATEWAY" in readme
-    assert "The gateway protocol is not encrypted" in readme
+    assert "A remotely accessible gateway uses token authentication" in readme

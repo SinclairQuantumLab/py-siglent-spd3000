@@ -22,25 +22,19 @@ python -m venv .venv
 ```
 
 Activate the environment with `.venv\Scripts\Activate.ps1` in Windows PowerShell or `source .venv/bin/activate` on Linux and macOS.
-On the gateway computer, install the gateway extra:
+On the gateway computer and each computer that will connect to it, install the gateway extra:
 
 ```bash
 python -m pip install -e ".[gateway]"
 ```
 
-On a computer that only connects to the gateway, install the base package:
-
-```bash
-python -m pip install -e .
-```
-
-Use `python -m pip install -e ".[driver]"` instead if that client computer must also connect directly through USBTMC/VISA or VXI-11.
+Use `python -m pip install -e ".[driver]"` on a computer that connects directly through USBTMC/VISA or VXI-11 without running or using the gateway.
 Compare the output of `git rev-parse HEAD` on every computer before starting the gateway; all hashes must be identical.
 Do not copy an editable source tree without its `.git` directory because the package would be unable to identify its commit and the gateway handshake would fail.
 Uncommitted local changes are allowed, but the person running them remains responsible for knowing that those changes are not represented by the commit hash.
 
 > **NOTE:** `uv` is optional and does not replace Git or the same-commit requirement.
-> After cloning and checking out the selected commit, run `uv sync --extra gateway --no-dev` on the gateway computer, `uv sync --no-dev` on a client-only computer, or `uv sync --extra driver --no-dev` on a computer that also connects directly.
+> After cloning and checking out the selected commit, run `uv sync --extra gateway --no-dev` on the gateway computer and its clients, or `uv sync --extra driver --no-dev` on a computer that only connects directly.
 > Run project commands through that environment by prefixing them with `uv run`, for example `uv run spd3000 --help`.
 
 ### Install a published build
@@ -52,12 +46,12 @@ Replace `<VERSION>` with one specific release number:
 # Gateway computer
 python -m pip install "py-siglent-spd3000[gateway]==<VERSION>"
 
-# Client-only computer
-python -m pip install "py-siglent-spd3000==<VERSION>"
+# Gateway client computer
+python -m pip install "py-siglent-spd3000[gateway]==<VERSION>"
 ```
 
 A built wheel contains its source commit, so Git is not required at runtime when every computer installs the same build.
-The base package supports raw TCP and gateway clients, while the `driver` and `gateway` extras install PyVISA/PyVISA-py USBTMC and VXI-11 support.
+The base package remains standard-library-only, while the `driver` extra installs direct USBTMC/VISA and VXI-11 support and the `gateway` extra installs the gateway's physical-connection dependencies plus a TOML compatibility parser for Python 3.10.
 These are the project's only two extras.
 SPD3303C supports USBTMC only and therefore requires one of these extras on the computer physically connected to it.
 
@@ -276,88 +270,111 @@ The owner of the physical connection enforces timing globally, so gateway client
 ## Gateway server
 
 Run one gateway server for each power supply that will be shared.
-The gateway computer is the computer that can reach the physical instrument, while a client is any program or computer that sends driver operations through that gateway.
-Client code still uses the ordinary `SPD3000` API.
+The gateway computer is the computer physically connected to the supply or able to reach it over the network, and client computers send the ordinary `SPD3000` operations to that gateway.
 
 ### Install
 
-Follow [Installation](#installation) on every participating computer.
-The gateway computer needs the `gateway` extra, client-only computers need the base package, and every checkout or installed build must report the same commit hash.
+Follow [Installation](#installation) on the gateway computer and every client computer.
+Install the `gateway` extra on all of them and verify that every installation reports the same Git commit.
 
-### Identify the addresses
+### Create the configuration files
 
-- `<INSTRUMENT_HOST>` is the power supply's IP address or hostname, for example `192.168.50.30`.
-- `<GATEWAY_HOST>` is the IP address or hostname of the computer running this gateway server, for example `192.168.50.20`.
-- `<TOKEN_FILE>` is a UTF-8 text file containing the same private secret on the gateway computer and each remote client, for example `gateway-token.txt`.
-- `localhost` means “this same computer” and is correct only when the gateway server and client run on one computer.
+The source repository and installed package include two safe-to-commit templates:
 
-Replace every `<...>` placeholder in the commands below with the value for your setup; do not type the angle brackets.
-Do not commit the token file to Git.
-The following command prints a suitable random secret; save that one line in the token file on the gateway computer and in a separate token file on each client computer:
+- `gateway-settings.toml.template` describes the gateway listener and its physical instrument connection.
+- `gateway-auth.toml.template` contains the shape of the separate authentication file.
+
+On the gateway computer, run the following command to create editable copies in the current directory:
+
+```bash
+spd3000 gateway init
+```
+
+The command creates `gateway-settings.toml` and `gateway-auth.toml` from those templates and refuses to overwrite existing files.
+Edit `gateway-settings.toml` for the gateway computer and its power supply.
+For a typical network-connected SPD3303X/X-E, use settings like these:
+
+```toml
+[gateway]
+bind = "192.168.50.20" # IP address of the computer that runs this gateway server
+port = 8765
+
+[instrument]
+connection = "socket"
+identifier = "192.168.50.30" # IP address of the power supply
+timeout_s = 5.0
+min_command_interval_ms = 100.0
+```
+
+`connection = "socket"` uses the documented Siglent raw-SCPI port 5025, and the official network commands provide no port-setting operation, so it is intentionally fixed inside the driver rather than exposed in this file.
+Use `connection = "vxi11"` with the instrument hostname for VXI-11, or `connection = "visa"` with a VISA resource in `identifier` for USBTMC and SPD3303C.
+
+For access from another computer, also edit the generated `gateway-auth.toml`.
+Generate a private token with the following command and paste the resulting line between the quotation marks after `token =`:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
+The completed authentication file has this form:
+
+```toml
+[auth]
+token = "replace-this-example-with-the-generated-private-token"
+```
+
+Copy the completed `gateway-auth.toml` securely to every authorized client computer.
+The real `gateway-settings.toml` and `gateway-auth.toml` files are excluded from Git; commit only their `.template` files.
+
 ### Start the gateway
 
-On the gateway computer, select how that computer reaches the instrument:
-
-- `--socket <INSTRUMENT_HOST>` uses raw TCP on an SPD3303X/X-E.
-- `--vxi11 <INSTRUMENT_HOST>` uses VXI-11 on an SPD3303X/X-E.
-- `--visa <VISA_RESOURCE>` uses a VISA resource and is the supported path for an SPD3303C.
-
-For a typical two-computer setup using raw TCP, start the server with:
+Run this command from the directory containing both TOML files:
 
 ```bash
-spd3000 gateway serve --socket <INSTRUMENT_HOST> --bind <GATEWAY_HOST> --token-file <TOKEN_FILE>
+spd3000 gateway serve
 ```
 
-For example, if the supply is `192.168.50.30` and the gateway computer is `192.168.50.20`:
+Use `--config <SETTINGS_PATH>` and `--auth <AUTH_PATH>` only when the files have different names or locations.
+If `--auth` is omitted, the server looks for `gateway-auth.toml` beside the settings file.
+The command keeps running until it is stopped.
 
-```bash
-spd3000 gateway serve --socket 192.168.50.30 --bind 192.168.50.20 --token-file gateway-token.txt
-```
-
-The default gateway port is `8765`, and the command keeps running until it is stopped.
+> **NOTE:** When installed with `uv`, run `uv run spd3000 gateway serve` instead.
 
 ### Connect a client
 
-On a different client computer, address the gateway computer rather than the power supply:
+`<GATEWAY_HOST>` below means the IP address or hostname of the gateway computer, such as `192.168.50.20`; replace the whole placeholder, including the angle brackets.
+On a client computer containing its copy of `gateway-auth.toml`, test the connection with:
 
 ```bash
-spd3000 idn --gateway <GATEWAY_HOST> --token-file <TOKEN_FILE>
+spd3000 idn --gateway <GATEWAY_HOST> --gateway-auth gateway-auth.toml
 ```
 
 The equivalent Python connection is:
 
 ```python
-from pathlib import Path
-
 import siglent_spd3000 as spd
 
 GATEWAY_HOST = "192.168.50.20"  # IP address or hostname of the gateway computer
-GATEWAY_TOKEN = Path("gateway-token.txt").read_text(encoding="utf-8").strip()
 
 with spd.SPD3000.connect(
     connection=spd.ConnectionType.GATEWAY,
     identifier=GATEWAY_HOST,
-    token=GATEWAY_TOKEN,
+    token=spd.load_gateway_auth("gateway-auth.toml"),
 ) as psu:
     print(psu.idn)
     psu.ch1.voltage = 5.0
 ```
 
-When the client runs on the gateway computer itself, the shorter local-only setup is:
+For a local-only setup, set `gateway.bind = "localhost"` and either leave the generated token empty or remove `gateway-auth.toml`.
+`localhost` means the gateway accepts clients only from that same computer, so no token is required.
 
-```bash
-spd3000 gateway serve --socket <INSTRUMENT_HOST>
-spd3000 idn --gateway localhost
-```
+### Ports and firewall
 
-The local-only form listens only on the gateway computer and does not require a token.
-A server that accepts other computers is rejected unless a token is configured.
-The gateway protocol is not encrypted, so use it only on a trusted network or carry it through a VPN, SSH tunnel, or TLS proxy.
+The gateway listens on TCP port 8765 by default; it does not use the common web ports 80 or 443.
+Remote clients require an inbound firewall rule for TCP 8765 on the gateway computer, preferably restricted to the trusted client IP addresses.
+The gateway computer must also be allowed to reach an SPD3303X/X-E at TCP 5025 when `connection = "socket"` is used.
+If you change `gateway.port`, use the same value in the firewall rule and pass `--gateway-port <PORT>` on each client or `port=<PORT>` to `SPD3000.connect()`.
+A remotely accessible gateway uses token authentication, but the protocol is not encrypted, so use it only on a trusted network or carry it through a VPN, SSH tunnel, or TLS proxy.
 
 ## Model differences
 

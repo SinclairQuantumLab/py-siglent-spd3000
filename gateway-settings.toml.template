@@ -1,0 +1,20 @@
+# Gateway listener and physical instrument settings for one power supply.
+
+[gateway]
+# Use "localhost" when clients run only on this computer.
+# For remote clients, use this computer's LAN address.
+bind = "localhost"
+port = 8765
+
+[instrument]
+# Supported values are "socket", "vxi11", and "visa".
+connection = "socket"
+identifier = "192.168.50.30"
+
+# These defaults follow the driver and Siglent's command-spacing recommendation.
+timeout_s = 5.0
+min_command_interval_ms = 100.0
+
+# For a VISA connection, replace connection and identifier and optionally select a backend.
+# identifier = "USB0::0x0483::0x7540::<SERIAL_NUMBER>::INSTR"
+# visa_backend = "@py"

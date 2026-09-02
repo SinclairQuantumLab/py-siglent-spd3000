@@ -3,6 +3,7 @@
 from .driver import SPD3000
 from .exceptions import (
     GatewayAuthenticationError,
+    GatewayConfigurationError,
     GatewayConnectionError,
     GatewayError,
     GatewayInternalError,
@@ -26,6 +27,7 @@ from .execution import (
     Query,
     Write,
 )
+from .gateway.config import load_gateway_auth
 from .models import (
     Capabilities,
     Channel,
@@ -57,6 +59,7 @@ __all__ = [
     "DirectExecutor",
     "ExecutionSettings",
     "GatewayAuthenticationError",
+    "GatewayConfigurationError",
     "GatewayConnectionError",
     "GatewayError",
     "GatewayInternalError",
@@ -84,5 +87,6 @@ __all__ = [
     "WaveformState",
     "Write",
     "iter_commands",
+    "load_gateway_auth",
     "lookup_command",
 ]

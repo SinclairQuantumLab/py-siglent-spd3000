@@ -484,6 +484,7 @@ gateway = [
     { name = "pyvisa" },
     { name = "pyvisa-py", extra = ["usb"] },
     { name = "standard-xdrlib", marker = "python_full_version >= '3.13'" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 
 [package.dev-dependencies]
@@ -504,6 +505,7 @@ requires-dist = [
     { name = "pyvisa-py", extras = ["usb"], marker = "extra == 'gateway'", specifier = ">=0.8" },
     { name = "standard-xdrlib", marker = "python_full_version >= '3.13' and extra == 'driver'" },
     { name = "standard-xdrlib", marker = "python_full_version >= '3.13' and extra == 'gateway'" },
+    { name = "tomli", marker = "python_full_version < '3.11' and extra == 'gateway'", specifier = ">=2.2" },
 ]
 provides-extras = ["driver", "gateway"]
 

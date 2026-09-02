@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._commit import UNKNOWN_COMMIT, get_commit
+from .._constants import DEFAULT_GATEWAY_PORT
 from ..exceptions import (
     GatewayAuthenticationError,
     GatewayInternalError,
@@ -122,7 +123,7 @@ class GatewayServer:
         executor: Executor,
         *,
         host: str = "127.0.0.1",
-        port: int = 8765,
+        port: int = DEFAULT_GATEWAY_PORT,
         token: str | None = None,
     ) -> None:
         if not _is_loopback(host) and not token:

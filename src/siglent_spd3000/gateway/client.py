@@ -8,6 +8,7 @@ from contextlib import suppress
 from typing import Any
 
 from .._commit import UNKNOWN_COMMIT, get_commit
+from .._constants import DEFAULT_GATEWAY_PORT
 from ..exceptions import GatewayConnectionError, GatewayProtocolError
 from ..execution import BatchResult, CommandBatch, ExecutionSettings
 from .protocol import (
@@ -26,7 +27,7 @@ class GatewayExecutor:
         self,
         host: str,
         *,
-        port: int = 8765,
+        port: int = DEFAULT_GATEWAY_PORT,
         token: str | None = None,
         settings: ExecutionSettings | None = None,
     ) -> None:

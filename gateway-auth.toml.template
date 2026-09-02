@@ -1,0 +1,5 @@
+# Replace the empty value with a private random token for remote access.
+# Do not commit gateway-auth.toml to Git.
+
+[auth]
+token = ""

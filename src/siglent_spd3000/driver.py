@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 from ipaddress import AddressValueError, IPv4Address, IPv4Network, NetmaskValueError
 from typing import overload
 
+from ._constants import DEFAULT_GATEWAY_PORT, DEFAULT_SCPI_PORT
 from .exceptions import (
     SPD3000ProtocolError,
     SPD3000ValidationError,
@@ -575,7 +576,7 @@ class SPD3000:
             cls._reject_connection_options(selected, token=token, visa_backend=visa_backend)
             return cls._connect_socket(
                 target,
-                port=cls._connection_port(port, default=5025),
+                port=cls._connection_port(port, default=DEFAULT_SCPI_PORT),
                 settings=settings,
             )
         if selected is ConnectionType.VXI11:
@@ -593,7 +594,7 @@ class SPD3000:
         cls._reject_connection_options(selected, visa_backend=visa_backend)
         return cls._connect_gateway(
             target,
-            port=cls._connection_port(port, default=8765),
+            port=cls._connection_port(port, default=DEFAULT_GATEWAY_PORT),
             token=token,
             settings=settings,
         )
@@ -634,7 +635,7 @@ class SPD3000:
         cls,
         host: str,
         *,
-        port: int = 5025,
+        port: int = DEFAULT_SCPI_PORT,
         settings: ExecutionSettings,
     ) -> SPD3000:
         """Build a driver over an SPD3303X/X-E raw SCPI socket."""
@@ -675,7 +676,7 @@ class SPD3000:
         cls,
         host: str,
         *,
-        port: int = 8765,
+        port: int = DEFAULT_GATEWAY_PORT,
         token: str | None = None,
         settings: ExecutionSettings,
     ) -> SPD3000:

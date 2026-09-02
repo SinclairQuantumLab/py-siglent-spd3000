@@ -21,6 +21,7 @@ gateway = [
     "pyvisa-py[usb]>=0.8",
     "python-vxi11>=0.9",
     "standard-xdrlib; python_version >= '3.13'",
+    "tomli>=2.2; python_version < '3.11'",
 ]
 
 [project.scripts]

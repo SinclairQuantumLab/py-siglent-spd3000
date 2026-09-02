@@ -47,6 +47,10 @@ class GatewayConnectionError(GatewayError, ConnectionError):
     """The gateway connection failed."""
 
 
+class GatewayConfigurationError(GatewayError, ValueError):
+    """The gateway settings file is missing or invalid."""
+
+
 class GatewayAuthenticationError(GatewayError):
     """The gateway rejected the pre-shared token."""
 

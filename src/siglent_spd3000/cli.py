@@ -4,19 +4,22 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from collections.abc import Sequence
 from dataclasses import asdict
 from pathlib import Path
 
+from ._constants import DEFAULT_GATEWAY_PORT, DEFAULT_SCPI_PORT
 from .driver import SPD3000
 from .exceptions import GatewayError, SPD3000Error
-from .execution import DirectExecutor, ExecutionSettings, Transport
 from .gateway import GatewayServer
+from .gateway.config import (
+    create_gateway_config_files,
+    load_gateway_auth,
+    load_gateway_settings,
+)
 from .models import Channel, ConnectionType, OutputState
 from .scpi import lookup_command
-from .transport import SocketTransport, VisaTransport, VXI11Transport
 
 
 def _channel(value: str) -> Channel:
@@ -42,23 +45,17 @@ def _add_connection(parser: argparse.ArgumentParser, *, gateway_allowed: bool = 
     group.add_argument("--visa", metavar="RESOURCE")
     if gateway_allowed:
         group.add_argument("--gateway", metavar="HOST")
-    parser.add_argument("--socket-port", type=int, default=5025)
-    parser.add_argument("--gateway-port", type=int, default=8765)
+    parser.add_argument("--socket-port", type=int, default=DEFAULT_SCPI_PORT)
+    parser.add_argument("--gateway-port", type=int, default=DEFAULT_GATEWAY_PORT)
     parser.add_argument("--visa-backend")
     parser.add_argument("--interval", type=float, default=0.100, metavar="SECONDS")
     parser.add_argument("--timeout", type=float, default=5.0, metavar="SECONDS")
     if gateway_allowed:
-        parser.add_argument("--token-file", type=Path)
-
-
-def _token(path: Path | None) -> str | None:
-    if path is not None:
-        return path.read_text(encoding="utf-8").strip()
-    return os.environ.get("SIGLENT_SPD3000_GATEWAY_TOKEN")
-
-
-def _settings(args: argparse.Namespace) -> ExecutionSettings:
-    return ExecutionSettings(args.interval, args.timeout)
+        parser.add_argument(
+            "--gateway-auth",
+            type=Path,
+            help="gateway authentication TOML (default: gateway-auth.toml if present)",
+        )
 
 
 def _open_device(args: argparse.Namespace) -> SPD3000:
@@ -89,22 +86,13 @@ def _open_device(args: argparse.Namespace) -> SPD3000:
         ConnectionType.GATEWAY,
         args.gateway,
         port=args.gateway_port,
-        token=_token(args.token_file),
+        token=load_gateway_auth(
+            args.gateway_auth or Path("gateway-auth.toml"),
+            required=args.gateway_auth is not None,
+        ),
         timeout_s=args.timeout,
         min_command_interval_ms=args.interval * 1000.0,
     )
-
-
-def _direct_executor(args: argparse.Namespace) -> DirectExecutor:
-    settings = _settings(args)
-    transport: Transport
-    if args.socket:
-        transport = SocketTransport(args.socket, port=args.socket_port, timeout=settings.timeout)
-    elif args.vxi11:
-        transport = VXI11Transport(args.vxi11, timeout=settings.timeout)
-    else:
-        transport = VisaTransport(args.visa, backend=args.visa_backend, timeout=settings.timeout)
-    return DirectExecutor(transport, settings)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -143,11 +131,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     gateway = subparsers.add_parser("gateway", help="gateway administration")
     gateway_subparsers = gateway.add_subparsers(dest="gateway_command", required=True)
+    initialize = gateway_subparsers.add_parser(
+        "init", help="create gateway-settings.toml and gateway-auth.toml"
+    )
+    initialize.add_argument("--directory", type=Path, default=Path("."))
     serve = gateway_subparsers.add_parser("serve", help="serve one physical connection")
-    _add_connection(serve, gateway_allowed=False)
-    serve.add_argument("--bind", default="127.0.0.1")
-    serve.add_argument("--port", type=int, default=8765)
-    serve.add_argument("--token-file", type=Path)
+    serve.add_argument(
+        "--config",
+        type=Path,
+        default=Path("gateway-settings.toml"),
+        help="gateway TOML file (default: gateway-settings.toml)",
+    )
+    serve.add_argument(
+        "--auth",
+        type=Path,
+        help="authentication TOML (default: gateway-auth.toml beside --config if present)",
+    )
     return parser
 
 
@@ -167,12 +166,28 @@ def _run(args: argparse.Namespace) -> int:
         return 0 if matches else 1
 
     if args.command == "gateway":
-        executor = _direct_executor(args)
-        server = GatewayServer(
-            executor, host=args.bind, port=args.port, token=_token(args.token_file)
-        )
+        if args.gateway_command == "init":
+            for created in create_gateway_config_files(args.directory):
+                print(f"Created {created}")
+            return 0
+        settings = load_gateway_settings(args.config)
+        auth_path = args.auth or settings.source.with_name("gateway-auth.toml")
+        token = load_gateway_auth(auth_path, required=args.auth is not None)
+        executor = settings.instrument.open_executor()
         try:
-            print(f"Serving SPD3000 gateway on {args.bind}:{server.port}")
+            server = GatewayServer(
+                executor,
+                host=settings.bind,
+                port=settings.port,
+                token=token,
+            )
+        except Exception:
+            executor.close()
+            raise
+        try:
+            print(
+                f"Serving SPD3000 gateway on {settings.bind}:{server.port} using {settings.source}"
+            )
             server.serve_forever()
         except KeyboardInterrupt:
             pass
