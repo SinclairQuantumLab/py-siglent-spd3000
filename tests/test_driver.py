@@ -305,7 +305,7 @@ def test_raw_enum_values_are_validated_before_io() -> None:
     assert executor.commands == baseline
 
 
-def test_identity_and_system_error_are_fresh_queries() -> None:
+def test_idn_and_system_error_are_fresh_queries() -> None:
     responses = responses_for("SPD3303X", **{"SYST:ERR?": ['-100,"Command error"']})
     responses["*IDN?"] = [
         "Siglent Technologies,SPD3303X,SPD0001,1.0",
@@ -315,7 +315,7 @@ def test_identity_and_system_error_are_fresh_queries() -> None:
     psu = SPD3000(executor)
 
     assert psu.model is Model.SPD3303X
-    assert psu.identity.firmware_version == "1.1"
+    assert psu.idn.firmware_version == "1.1"
     assert psu.system.error.code == -100
 
 

@@ -670,7 +670,7 @@ class SPD3000:
         return self._executor.settings
 
     @property
-    def identity(self) -> Identification:
+    def idn(self) -> Identification:
         """Fresh parsed ``*IDN?`` result."""
 
         return parse_identification(self._query("*IDN?"))

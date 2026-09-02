@@ -26,6 +26,12 @@ def test_lookup_accepts_short_query_with_arguments() -> None:
     assert matches[0].access is Access.READ
 
 
+def test_common_command_lookup_drops_leading_asterisk() -> None:
+    matches = lookup_command("*IDN?")
+    assert len(matches) == 1
+    assert matches[0].python_path == "idn"
+
+
 def test_command_registry_filters_model_capabilities() -> None:
     c_paths = {command.python_path for command in iter_commands(Model.SPD3303C)}
     assert "measure.power(channel)" not in c_paths

@@ -177,7 +177,7 @@ def _run(args: argparse.Namespace) -> int:
 
     with _open_device(args) as psu:
         if args.command == "idn":
-            print(psu.identity.raw)
+            print(psu.idn.raw)
         elif args.command == "set":
             source_channel = psu.ch1 if args.channel is Channel.CH1 else psu.ch2
             setattr(source_channel, args.quantity, args.value)

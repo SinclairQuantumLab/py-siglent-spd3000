@@ -42,3 +42,19 @@ def test_output_exception_is_documented_for_users() -> None:
     docs = (root / "docs" / "README.md").read_text(encoding="utf-8")
     assert "Intentional `OUTPut` convenience exception" in readme
     assert "API interpretation note: `OUTPut`" in docs
+
+
+def test_basic_use_shows_scpi_for_each_operation() -> None:
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+    expected = (
+        "SCPI: *IDN?",
+        "SCPI: CH1:VOLTage 5.0",
+        "SCPI: CH1:CURRent 0.5",
+        "SCPI: CH1:VOLTage?",
+        "SCPI: CH1:CURRent?",
+        "SCPI: MEASure:VOLTage? CH1",
+        "SCPI: MEASure:CURRent? CH1",
+        "SCPI: OUTPut CH1,ON",
+        "SCPI: SYSTem:STATus?",
+    )
+    assert all(command in readme for command in expected)

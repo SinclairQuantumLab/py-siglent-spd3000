@@ -48,7 +48,7 @@ def _command(
 
 
 COMMANDS: tuple[CommandInfo, ...] = (
-    _command("*IDN?", "identity", Access.READ),
+    _command("*IDN?", "idn", Access.READ),
     _command("*SAV", "save(slot)", Access.WRITE),
     _command("*RCL", "recall(slot)", Access.WRITE),
     _command("INSTRUMENT", "instrument.channel", Access.READ_WRITE, aliases=("INST",)),

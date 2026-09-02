@@ -32,18 +32,29 @@ Already have a command from a SIGLENT manual? See
 [From a manual SCPI command to Python](#from-a-manual-scpi-command-to-python).
 
 ```python
+import siglent_spd3000 as spd
 from siglent_spd3000 import SPD3000
 
 with SPD3000.connect("socket", "192.168.1.50") as psu:
-    psu.ch1.voltage = 5.0
-    psu.ch1.current = 0.5
-    print(psu.measure.voltage("CH1"))
-    print(psu.measure.current("CH1"))
-    psu.output.ch1 = True
+    print(psu.idn)  # identify the instrument; SCPI: *IDN?
+
+    psu.ch1.voltage = 5.0  # set CH1 voltage; SCPI: CH1:VOLTage 5.0
+    psu.ch1.current = 0.5  # set CH1 current limit; SCPI: CH1:CURRent 0.5
+    print(psu.ch1.voltage)  # query CH1 voltage setting; SCPI: CH1:VOLTage?
+    print(psu.ch1.current)  # query CH1 current setting; SCPI: CH1:CURRent?
+
+    # Measure the live CH1 output, not its configured settings.
+    print(psu.measure.voltage(spd.Channel.CH1))  # SCPI: MEASure:VOLTage? CH1
+    print(psu.measure.current(spd.Channel.CH1))  # SCPI: MEASure:CURRent? CH1
+
+    psu.output.ch1 = True  # enable CH1 output; SCPI: OUTPut CH1,ON
+    print(psu.output.ch1)  # query CH1 state; SCPI: SYSTem:STATus?
 ```
 
 Every property read performs a fresh hardware query; output state and
-measurements are never answered from a write cache.
+measurements are never answered from a write cache. The SPD command set has no
+documented `OUTPut?` query, so `psu.output.ch1` reads and decodes
+`SYSTem:STATus?`.
 
 For more involved programs, keep the main class directly available and access
 additional public types through the package namespace. The unified `connect()`
@@ -99,8 +110,8 @@ values are also accepted where documented. Thus channel arguments accept both
 
 There are deliberate quirks:
 
-- IEEE common commands lose the leading `*` and use a descriptive root member:
-  `*IDN?` becomes `psu.identity`, `*SAV 1` becomes `psu.save(1)`, `*RCL 1`
+- IEEE common commands lose the leading `*`:
+  `*IDN?` becomes `psu.idn`, `*SAV 1` becomes `psu.save(1)`, `*RCL 1`
   becomes `psu.recall(1)`, and `*LOCK?` becomes `psu.locked`.
 - Manual abbreviations such as `MEAS:VOLT?` and `SYST:STAT?` use their expanded
   words in Python: `measure.voltage(channel)` and `system.status`.
