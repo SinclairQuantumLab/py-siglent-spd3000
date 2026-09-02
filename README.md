@@ -3,6 +3,27 @@
 A synchronous Python driver and optional centralized gateway for Siglent SPD3303X, SPD3303X-E, and SPD3303C programmable DC power supplies.
 Connecting through the [gateway server](#gateway-server) is the recommended way to share a supply because one server owns the physical connection, runs client requests one at a time, and enforces the required command spacing; simple one-process scripts can still connect directly through the same Python API.
 
+## Table of contents
+
+- [Installation](#installation)
+  - [Install from a Git checkout](#install-from-a-git-checkout)
+  - [Install a published build](#install-a-published-build)
+- [Basic use](#basic-use)
+- [From a manual SCPI command to Python](#from-a-manual-scpi-command-to-python)
+  - [1. Guess the Python path from the SCPI command line](#1-guess-the-python-path-from-the-scpi-command-line)
+  - [2. Confirm the mapping with the helper](#2-confirm-the-mapping-with-the-helper)
+- [Intentional `OUTPut` convenience exception](#intentional-output-convenience-exception)
+- [SCPI-shaped API](#scpi-shaped-api)
+- [Timing](#timing)
+- [Gateway server](#gateway-server)
+  - [Install](#install)
+  - [Create the configuration files](#create-the-configuration-files)
+  - [Start the gateway](#start-the-gateway)
+  - [Connect a client](#connect-a-client)
+  - [Ports and firewall](#ports-and-firewall)
+- [Model differences](#model-differences)
+- [Development](#development)
+
 ## Installation
 
 Python 3.10 or newer is required.

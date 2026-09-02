@@ -117,3 +117,20 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "TCP 5025" in readme
     assert "connection=spd.ConnectionType.GATEWAY" in readme
     assert "A remotely accessible gateway uses token authentication" in readme
+
+
+def test_readme_has_table_of_contents_for_major_sections() -> None:
+    readme = (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
+    contents = readme.split("## Installation", 1)[0]
+    for anchor in (
+        "#installation",
+        "#basic-use",
+        "#from-a-manual-scpi-command-to-python",
+        "#intentional-output-convenience-exception",
+        "#scpi-shaped-api",
+        "#timing",
+        "#gateway-server",
+        "#model-differences",
+        "#development",
+    ):
+        assert f"]({anchor})" in contents
