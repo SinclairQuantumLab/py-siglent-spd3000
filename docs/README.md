@@ -45,12 +45,14 @@ SCPI-derived root names own validation and instrument I/O. Modernized names are
 thin, developer-friendly aliases:
 
 - IEEE common commands lose the leading `*`:
-  - `sav(slot)` -> `save(slot)`
-  - `rcl(slot)` -> `recall(slot)`
-  - `lock()` and `unlock()` preserve the remaining command names.
-  - `locked` is the necessary `*LOCK?` exception because one Python member
-    cannot be both a method and a boolean property.
-- Root network commands have optional grouped aliases:
+  - Stored setups:
+    - `sav(slot)` -> `save(slot)`
+    - `rcl(slot)` -> `recall(slot)`
+  - Front-panel locking:
+    - `lock()` and `unlock()` preserve the command names.
+    - `locked` is the necessary `*LOCK?` exception because one Python member
+      cannot be both a method and a boolean property.
+- Network settings have optional grouped aliases under `network`:
   - `ipaddr` -> `network.host`
   - `maskaddr` -> `network.subnet_mask`
   - `gateaddr` -> `network.gateway`

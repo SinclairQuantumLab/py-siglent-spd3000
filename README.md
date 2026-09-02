@@ -113,22 +113,27 @@ names are additive aliases which delegate to it; they do not contain separate
 validation or I/O logic:
 
 - IEEE common commands lose the leading `*`:
-  - `*IDN?` maps directly to `psu.idn`.
-  - `*SAV 1` maps to canonical `psu.sav(1)`; `psu.save(1)` is its readable alias.
-  - `*RCL 1` maps to canonical `psu.rcl(1)`; `psu.recall(1)` is its readable alias.
-  - `*LOCK` and `*UNLOCK` map directly to `psu.lock()` and `psu.unlock()`.
-  - `*LOCK?` maps exceptionally to `psu.locked`. Python cannot expose `lock` as
-    both a callable method and a boolean property, so the query uses the
-    adjective `locked`.
-- `INSTrument CH1` maps directly to `psu.instrument = "CH1"`.
-- `IPaddr` maps to canonical `psu.ipaddr`; `psu.network.host` is its grouped alias.
-- `MASKaddr` maps to canonical `psu.maskaddr`; `psu.network.subnet_mask` is its
-  grouped alias.
-- `GATEaddr` maps to canonical `psu.gateaddr`; `psu.network.gateway` is its
-  grouped alias.
-- `DHCP` maps to canonical `psu.dhcp`; `psu.network.dhcp` is its grouped alias.
+  - Identification: `*IDN?` maps directly to `psu.idn`.
+  - Stored setups:
+    - `*SAV 1` maps to canonical `psu.sav(1)`; `psu.save(1)` is its readable
+      alias.
+    - `*RCL 1` maps to canonical `psu.rcl(1)`; `psu.recall(1)` is its readable
+      alias.
+  - Front-panel locking:
+    - `*LOCK` and `*UNLOCK` map directly to `psu.lock()` and `psu.unlock()`.
+    - `*LOCK?` maps exceptionally to `psu.locked`. Python cannot expose `lock`
+      as both a callable method and a boolean property.
+- Network settings keep their SCPI-derived root properties and also provide
+  grouped aliases under `psu.network`:
+  - `psu.ipaddr` -> `psu.network.host`
+  - `psu.maskaddr` -> `psu.network.subnet_mask`
+  - `psu.gateaddr` -> `psu.network.gateway`
+  - `psu.dhcp` -> `psu.network.dhcp`
 
-The remaining naming and behavior exceptions are explicit:
+Commands which already map cleanly need no alias; for example,
+`INSTrument CH1` maps directly to `psu.instrument = "CH1"`.
+
+The remaining behavior and naming rules are:
 
 - Manual abbreviations such as `MEAS:VOLT?` and `SYST:STAT?` use their expanded
   words in Python: `measure.voltage(channel)` and `system.status`.
