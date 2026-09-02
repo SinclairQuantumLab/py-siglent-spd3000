@@ -112,9 +112,14 @@ The mechanically derived name is always the canonical implementation. Friendly
 names are additive aliases which delegate to it; they do not contain separate
 validation or I/O logic:
 
-- `*IDN?` maps directly to `psu.idn` after dropping the leading `*`.
-- `*SAV 1` maps to canonical `psu.sav(1)`; `psu.save(1)` is its readable alias.
-- `*RCL 1` maps to canonical `psu.rcl(1)`; `psu.recall(1)` is its readable alias.
+- IEEE common commands lose the leading `*`:
+  - `*IDN?` maps directly to `psu.idn`.
+  - `*SAV 1` maps to canonical `psu.sav(1)`; `psu.save(1)` is its readable alias.
+  - `*RCL 1` maps to canonical `psu.rcl(1)`; `psu.recall(1)` is its readable alias.
+  - `*LOCK` and `*UNLOCK` map directly to `psu.lock()` and `psu.unlock()`.
+  - `*LOCK?` maps exceptionally to `psu.locked`. Python cannot expose `lock` as
+    both a callable method and a boolean property, so the query uses the
+    adjective `locked`.
 - `INSTrument CH1` maps directly to `psu.instrument = "CH1"`.
 - `IPaddr` maps to canonical `psu.ipaddr`; `psu.network.host` is its grouped alias.
 - `MASKaddr` maps to canonical `psu.maskaddr`; `psu.network.subnet_mask` is its
@@ -125,9 +130,6 @@ validation or I/O logic:
 
 The remaining naming and behavior exceptions are explicit:
 
-- `*LOCK` maps exactly to `psu.lock()`, but its query `*LOCK?` maps to
-  `psu.locked`. Python cannot expose `lock` as both a callable method and a
-  boolean property, so the query uses the adjective `locked`.
 - Manual abbreviations such as `MEAS:VOLT?` and `SYST:STAT?` use their expanded
   words in Python: `measure.voltage(channel)` and `system.status`.
 - `OUTPut` keeps canonical `output(channel, state)` and adds channel convenience

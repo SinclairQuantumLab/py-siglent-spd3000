@@ -44,17 +44,19 @@ are hardware-revision-sensitive.
 SCPI-derived root names own validation and instrument I/O. Modernized names are
 thin, developer-friendly aliases:
 
-- `sav(slot)` -> `save(slot)`
-- `rcl(slot)` -> `recall(slot)`
-- `ipaddr` -> `network.host`
-- `maskaddr` -> `network.subnet_mask`
-- `gateaddr` -> `network.gateway`
-- `dhcp` -> `network.dhcp`
+- IEEE common commands lose the leading `*`:
+  - `sav(slot)` -> `save(slot)`
+  - `rcl(slot)` -> `recall(slot)`
+  - `lock()` and `unlock()` preserve the remaining command names.
+  - `locked` is the necessary `*LOCK?` exception because one Python member
+    cannot be both a method and a boolean property.
+- Root network commands have optional grouped aliases:
+  - `ipaddr` -> `network.host`
+  - `maskaddr` -> `network.subnet_mask`
+  - `gateaddr` -> `network.gateway`
+  - `dhcp` -> `network.dhcp`
 
-`*LOCK`/`*LOCK?` is the necessary naming exception: `lock()` sends the command,
-while `locked` performs the query because one Python member cannot be both a
-method and a boolean property. The complete mapping and rationale are in the
-project README.
+The complete mapping and rationale are in the project README.
 
 ## API interpretation note: `OUTPut`
 
