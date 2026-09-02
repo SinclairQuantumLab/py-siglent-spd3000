@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install package and development tools
+        run: |
+          python -m pip install -e ".[driver,gateway]"
+          python -m pip install pytest pytest-cov ruff mypy
+
+      - name: Lint
+        run: python -m ruff check .
+
+      - name: Check formatting
+        run: python -m ruff format --check .
+
+      - name: Type check
+        run: python -m mypy src
+
+      - name: Test
+        run: python -m pytest --cov=siglent_spd3000 --cov-report=term-missing
+
+      - name: Build distributions
+        run: python -m pip wheel . --no-deps --wheel-dir dist
+
+      - name: Verify wheel import
+        shell: bash
+        run: |
+          wheel=$(find dist -name '*.whl' -print -quit)
+          python -I -c "import sys; sys.path.insert(0, '$wheel'); import siglent_spd3000; print(siglent_spd3000.SPD3000.__name__)"
