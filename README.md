@@ -31,7 +31,7 @@ extras. SPD3303C exposes USB Device/USBTMC only and therefore needs one of them.
 ```python
 from siglent_spd3000 import SPD3000
 
-with SPD3000.from_socket("192.168.1.50") as psu:
+with SPD3000.connect("socket", "192.168.1.50") as psu:
     psu.ch1.voltage = 5.0
     psu.ch1.current = 0.5
     print(psu.measure.ch1.voltage)
@@ -39,21 +39,29 @@ with SPD3000.from_socket("192.168.1.50") as psu:
     psu.output.ch1 = True
 ```
 
-Equivalent constructors are `from_vxi11()`, `from_visa()`, and
-`from_gateway()`. Every property read performs a fresh hardware query; output
-state and measurements are never answered from a write cache.
+Every property read performs a fresh hardware query; output state and
+measurements are never answered from a write cache.
 
 For more involved programs, keep the main class directly available and access
-additional public types through the package namespace:
+additional public types through the package namespace. The unified `connect()`
+factory accepts common execution settings directly:
 
 ```python
 import siglent_spd3000 as spd
 from siglent_spd3000 import SPD3000
 
-with SPD3000.from_socket("192.168.1.50") as psu:
+with SPD3000.connect(
+    connection=spd.ConnectionType.SOCKET,
+    identifier="192.168.1.50",
+    timeout_s=5.0,
+    min_command_interval_ms=50,
+) as psu:
     psu.output(spd.Channel.CH1, True)
     psu.output.track(spd.TrackingMode.INDEPENDENT)
 ```
+
+`connection` also accepts the strings `"socket"`, `"vxi11"`, `"visa"`, and
+`"gateway"`.
 
 ## Intentional `OUTPut` convenience exception
 
@@ -64,7 +72,7 @@ per-channel property forms are both supported and share exactly one write
 implementation:
 
 ```python
-psu.output(Channel.CH1, True)  # OUTP CH1,ON
+psu.output(spd.Channel.CH1, True)  # OUTP CH1,ON
 psu.output.ch1 = True  # the same OUTP CH1,ON
 
 print(psu.output.ch1)  # fresh SYST:STAT?, bit 4
@@ -80,17 +88,15 @@ not report the last commanded CH3 value as if it were measured state.
 ## SCPI-shaped API
 
 ```python
-from siglent_spd3000 import TimerStep
-
-psu.instrument.channel = Channel.CH1
+psu.instrument.channel = spd.Channel.CH1
 psu.ch1.voltage = 3.3
 voltage = psu.measure.ch1.voltage
 
 status = psu.system.status
 error = psu.system.error  # pops one error-queue entry
 
-psu.timer(Channel.CH1, True)
-psu.timer.set[Channel.CH1, 1] = TimerStep(voltage=3.0, current=0.5, time=2.0)
+psu.timer(spd.Channel.CH1, True)
+psu.timer.set[spd.Channel.CH1, 1] = spd.TimerStep(voltage=3.0, current=0.5, time=2.0)
 
 psu.network.dhcp = False
 psu.network.ip_address = "192.168.1.50"
@@ -110,10 +116,12 @@ Siglent recommends LF-only termination and a delay of 10-100 ms between most
 commands and between a query write and read. The driver defaults to 100 ms:
 
 ```python
-from siglent_spd3000 import ExecutionSettings
-
-settings = ExecutionSettings(min_command_interval=0.100, timeout=5.0)
+settings = spd.ExecutionSettings(min_command_interval=0.100, timeout=5.0)
 ```
+
+Most callers can pass these values to `SPD3000.connect()` as shown in Basic
+use. `ExecutionSettings` remains useful for custom executors and gateway
+internals; its interval is expressed in seconds.
 
 Finite, non-negative intervals outside 10-100 ms are allowed but emit
 `SPD3000TimingWarning` at the caller. Negative, NaN, and infinite values are

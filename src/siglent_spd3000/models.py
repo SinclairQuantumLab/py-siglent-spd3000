@@ -17,6 +17,15 @@ class Model(str, Enum):
     SPD3303C = "SPD3303C"
 
 
+class ConnectionType(str, Enum):
+    """User-facing connection method selected by :meth:`SPD3000.connect`."""
+
+    SOCKET = "socket"
+    VXI11 = "vxi11"
+    VISA = "visa"
+    GATEWAY = "gateway"
+
+
 class Channel(str, Enum):
     """Physical output channel."""
 

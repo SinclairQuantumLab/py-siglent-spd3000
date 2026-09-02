@@ -86,7 +86,13 @@ class ExecutionSettings:
     min_command_interval: float
     timeout: float
 
-    def __init__(self, min_command_interval: float = 0.100, timeout: float = 5.0) -> None:
+    def __init__(
+        self,
+        min_command_interval: float = 0.100,
+        timeout: float = 5.0,
+        *,
+        _warning_stacklevel: int = 2,
+    ) -> None:
         interval = _finite_number("min_command_interval", min_command_interval)
         timeout_value = _finite_number("timeout", timeout)
         if interval < 0:
@@ -97,7 +103,7 @@ class ExecutionSettings:
             warnings.warn(
                 "min_command_interval is outside Siglent's recommended 10-100 ms range",
                 SPD3000TimingWarning,
-                stacklevel=2,
+                stacklevel=_warning_stacklevel,
             )
         object.__setattr__(self, "min_command_interval", interval)
         object.__setattr__(self, "timeout", timeout_value)

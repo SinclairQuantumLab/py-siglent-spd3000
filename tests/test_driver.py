@@ -5,9 +5,12 @@ import pytest
 from siglent_spd3000 import (
     SPD3000,
     Channel,
+    ConnectionType,
+    ExecutionSettings,
     Model,
     OperatingMode,
     SPD3000ProtocolError,
+    SPD3000TimingWarning,
     SPD3000ValidationError,
     TimerStep,
     TrackingMode,
@@ -15,6 +18,90 @@ from siglent_spd3000 import (
 )
 
 from .conftest import FakeExecutor, responses_for
+
+
+def test_connect_dispatches_and_converts_milliseconds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    sentinel = object()
+
+    def fake_connect_socket(
+        _cls: type[SPD3000],
+        host: str,
+        *,
+        port: int,
+        settings: object,
+    ) -> object:
+        captured.update(host=host, port=port, settings=settings)
+        return sentinel
+
+    monkeypatch.setattr(SPD3000, "_connect_socket", classmethod(fake_connect_socket))
+
+    with pytest.warns(SPD3000TimingWarning) as caught:
+        result = SPD3000.connect(
+            connection="SOCKET",
+            identifier=" 192.168.1.50 ",
+            timeout_s=7.0,
+            min_command_interval_ms=5,
+            port=15025,
+        )
+
+    assert result is sentinel
+    assert captured["host"] == "192.168.1.50"
+    assert captured["port"] == 15025
+    settings = captured["settings"]
+    assert isinstance(settings, ExecutionSettings)
+    assert settings.timeout == 7.0
+    assert settings.min_command_interval == 0.005
+    assert caught[0].filename == __file__
+
+
+def test_connect_rejects_unknown_method_and_method_specific_options() -> None:
+    with pytest.raises(SPD3000ValidationError, match="connection must be one of"):
+        SPD3000.connect("ethernet", "192.168.1.50")
+
+    with pytest.raises(SPD3000ValidationError, match="port cannot be used"):
+        SPD3000.connect(ConnectionType.VXI11, "192.168.1.50", port=1234)
+
+
+def test_connect_dispatches_every_supported_connection_type(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str, dict[str, object]]] = []
+    sentinel = object()
+
+    def recorder(name: str):  # type: ignore[no-untyped-def]
+        def fake(_cls: type[SPD3000], target: str, **kwargs: object) -> object:
+            calls.append((name, target, kwargs))
+            return sentinel
+
+        return classmethod(fake)
+
+    for name in ("_connect_socket", "_connect_vxi11", "_connect_visa", "_connect_gateway"):
+        monkeypatch.setattr(SPD3000, name, recorder(name))
+
+    assert SPD3000.connect(ConnectionType.SOCKET, "socket-host") is sentinel
+    assert SPD3000.connect("vxi11", "vxi11-host") is sentinel
+    assert SPD3000.connect(ConnectionType.VISA, "USB0::1::INSTR", visa_backend="@py") is sentinel
+    assert SPD3000.connect("gateway", "gateway-host", port=9876, token="secret") is sentinel
+
+    assert [(name, target) for name, target, _kwargs in calls] == [
+        ("_connect_socket", "socket-host"),
+        ("_connect_vxi11", "vxi11-host"),
+        ("_connect_visa", "USB0::1::INSTR"),
+        ("_connect_gateway", "gateway-host"),
+    ]
+    assert calls[0][2]["port"] == 5025
+    assert calls[2][2]["backend"] == "@py"
+    assert calls[3][2]["port"] == 9876
+    assert calls[3][2]["token"] == "secret"
+    assert all(isinstance(kwargs["settings"], ExecutionSettings) for _, _, kwargs in calls)
+
+
+def test_backend_connection_helpers_are_not_public_constructors() -> None:
+    for name in ("from_socket", "from_vxi11", "from_visa", "from_gateway"):
+        assert not hasattr(SPD3000, name)
 
 
 def test_output_callable_and_properties_share_one_write_path() -> None:

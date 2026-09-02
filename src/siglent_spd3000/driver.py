@@ -26,6 +26,7 @@ from .models import (
     CAPABILITIES,
     Capabilities,
     Channel,
+    ConnectionType,
     Identification,
     SystemError,
     SystemStatus,
@@ -480,18 +481,119 @@ class SPD3000:
         self.scpi = RawSCPI(self)
 
     @classmethod
-    def from_socket(
+    def connect(
+        cls,
+        connection: ConnectionType | str,
+        identifier: str,
+        *,
+        timeout_s: float = 5.0,
+        min_command_interval_ms: float = 100.0,
+        port: int | None = None,
+        token: str | None = None,
+        visa_backend: str | None = None,
+    ) -> SPD3000:
+        """Connect through a selected backend while configuring common execution settings.
+
+        ``identifier`` is a hostname or IP address for socket, VXI-11, and
+        gateway connections, and a VISA resource string for VISA connections.
+        Method-specific options are rejected when supplied to another method.
+        """
+
+        if isinstance(connection, ConnectionType):
+            selected = connection
+        elif isinstance(connection, str):
+            try:
+                selected = ConnectionType(connection.strip().lower())
+            except ValueError as exc:
+                choices = ", ".join(item.value for item in ConnectionType)
+                raise SPD3000ValidationError(f"connection must be one of: {choices}") from exc
+        else:
+            raise SPD3000ValidationError("connection must be a ConnectionType or string")
+
+        if not isinstance(identifier, str) or not identifier.strip():
+            raise SPD3000ValidationError("identifier must be a non-empty string")
+        target = identifier.strip()
+
+        if isinstance(min_command_interval_ms, bool) or not isinstance(
+            min_command_interval_ms, (int, float)
+        ):
+            raise SPD3000ValidationError("min_command_interval_ms must be a real number")
+        settings = ExecutionSettings(
+            min_command_interval=float(min_command_interval_ms) / 1000.0,
+            timeout=timeout_s,
+            _warning_stacklevel=3,
+        )
+
+        if selected is ConnectionType.SOCKET:
+            cls._reject_connection_options(selected, token=token, visa_backend=visa_backend)
+            return cls._connect_socket(
+                target,
+                port=cls._connection_port(port, default=5025),
+                settings=settings,
+            )
+        if selected is ConnectionType.VXI11:
+            cls._reject_connection_options(
+                selected,
+                port=port,
+                token=token,
+                visa_backend=visa_backend,
+            )
+            return cls._connect_vxi11(target, settings=settings)
+        if selected is ConnectionType.VISA:
+            cls._reject_connection_options(selected, port=port, token=token)
+            return cls._connect_visa(target, backend=visa_backend, settings=settings)
+
+        cls._reject_connection_options(selected, visa_backend=visa_backend)
+        return cls._connect_gateway(
+            target,
+            port=cls._connection_port(port, default=8765),
+            token=token,
+            settings=settings,
+        )
+
+    @staticmethod
+    def _connection_port(port: int | None, *, default: int) -> int:
+        if port is None:
+            return default
+        if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+            raise SPD3000ValidationError("port must be an integer from 1 through 65535")
+        return port
+
+    @staticmethod
+    def _reject_connection_options(
+        connection: ConnectionType,
+        *,
+        port: int | None = None,
+        token: str | None = None,
+        visa_backend: str | None = None,
+    ) -> None:
+        invalid = [
+            name
+            for name, value in (
+                ("port", port),
+                ("token", token),
+                ("visa_backend", visa_backend),
+            )
+            if value is not None
+        ]
+        if invalid:
+            names = ", ".join(invalid)
+            raise SPD3000ValidationError(
+                f"{names} cannot be used with connection={connection.value!r}"
+            )
+
+    @classmethod
+    def _connect_socket(
         cls,
         host: str,
         *,
         port: int = 5025,
-        settings: ExecutionSettings | None = None,
+        settings: ExecutionSettings,
     ) -> SPD3000:
-        """Connect to an SPD3303X/X-E raw SCPI socket on port 5025."""
+        """Build a driver over an SPD3303X/X-E raw SCPI socket."""
 
-        active = settings or ExecutionSettings()
         device = cls(
-            DirectExecutor(SocketTransport(host, port=port, timeout=active.timeout), active)
+            DirectExecutor(SocketTransport(host, port=port, timeout=settings.timeout), settings)
         )
         if not device.capabilities.socket:
             device.close()
@@ -499,40 +601,38 @@ class SPD3000:
         return device
 
     @classmethod
-    def from_vxi11(cls, host: str, *, settings: ExecutionSettings | None = None) -> SPD3000:
-        """Connect to an SPD3303X/X-E with VXI-11."""
+    def _connect_vxi11(cls, host: str, *, settings: ExecutionSettings) -> SPD3000:
+        """Build a driver over an SPD3303X/X-E VXI-11 connection."""
 
-        active = settings or ExecutionSettings()
-        device = cls(DirectExecutor(VXI11Transport(host, timeout=active.timeout), active))
+        device = cls(DirectExecutor(VXI11Transport(host, timeout=settings.timeout), settings))
         if not device.capabilities.vxi11:
             device.close()
             raise UnsupportedFeatureError(f"{device.model.value} does not support VXI-11")
         return device
 
     @classmethod
-    def from_visa(
+    def _connect_visa(
         cls,
         resource: str,
         *,
         backend: str | None = None,
-        settings: ExecutionSettings | None = None,
+        settings: ExecutionSettings,
     ) -> SPD3000:
-        """Connect to any supported model through a PyVISA resource."""
+        """Build a driver over a PyVISA resource."""
 
-        active = settings or ExecutionSettings()
-        transport = VisaTransport(resource, backend=backend, timeout=active.timeout)
-        return cls(DirectExecutor(transport, active))
+        transport = VisaTransport(resource, backend=backend, timeout=settings.timeout)
+        return cls(DirectExecutor(transport, settings))
 
     @classmethod
-    def from_gateway(
+    def _connect_gateway(
         cls,
         host: str,
         *,
         port: int = 8765,
         token: str | None = None,
-        settings: ExecutionSettings | None = None,
+        settings: ExecutionSettings,
     ) -> SPD3000:
-        """Use the same semantic driver through a persistent gateway session."""
+        """Build a driver over a persistent gateway session."""
 
         from .gateway.client import GatewayExecutor
 

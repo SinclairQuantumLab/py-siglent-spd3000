@@ -14,7 +14,7 @@ from .driver import SPD3000
 from .exceptions import GatewayError, SPD3000Error
 from .execution import DirectExecutor, ExecutionSettings, Transport
 from .gateway import GatewayServer
-from .models import Channel
+from .models import Channel, ConnectionType
 from .scpi import lookup_command
 from .transport import SocketTransport, VisaTransport, VXI11Transport
 
@@ -62,18 +62,36 @@ def _settings(args: argparse.Namespace) -> ExecutionSettings:
 
 
 def _open_device(args: argparse.Namespace) -> SPD3000:
-    settings = _settings(args)
     if args.socket:
-        return SPD3000.from_socket(args.socket, port=args.socket_port, settings=settings)
+        return SPD3000.connect(
+            ConnectionType.SOCKET,
+            args.socket,
+            port=args.socket_port,
+            timeout_s=args.timeout,
+            min_command_interval_ms=args.interval * 1000.0,
+        )
     if args.vxi11:
-        return SPD3000.from_vxi11(args.vxi11, settings=settings)
+        return SPD3000.connect(
+            ConnectionType.VXI11,
+            args.vxi11,
+            timeout_s=args.timeout,
+            min_command_interval_ms=args.interval * 1000.0,
+        )
     if args.visa:
-        return SPD3000.from_visa(args.visa, backend=args.visa_backend, settings=settings)
-    return SPD3000.from_gateway(
+        return SPD3000.connect(
+            ConnectionType.VISA,
+            args.visa,
+            visa_backend=args.visa_backend,
+            timeout_s=args.timeout,
+            min_command_interval_ms=args.interval * 1000.0,
+        )
+    return SPD3000.connect(
+        ConnectionType.GATEWAY,
         args.gateway,
         port=args.gateway_port,
         token=_token(args.token_file),
-        settings=settings,
+        timeout_s=args.timeout,
+        min_command_interval_ms=args.interval * 1000.0,
     )
 
 
