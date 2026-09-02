@@ -36,19 +36,19 @@ import siglent_spd3000 as spd
 from siglent_spd3000 import SPD3000
 
 with SPD3000.connect("socket", "192.168.1.50") as psu:
-    print(psu.idn)  # identify the instrument; SCPI: *IDN?
+    print(psu.idn)  # identify the instrument; SCPI: "*IDN?"
 
-    psu.ch1.voltage = 5.0  # set CH1 voltage; SCPI: CH1:VOLTage 5.0
-    psu.ch1.current = 0.5  # set CH1 current limit; SCPI: CH1:CURRent 0.5
-    print(psu.ch1.voltage)  # query CH1 voltage setting; SCPI: CH1:VOLTage?
-    print(psu.ch1.current)  # query CH1 current setting; SCPI: CH1:CURRent?
+    psu.ch1.voltage = 5.0  # set CH1 voltage; SCPI: "CH1:VOLTage 5.0"
+    psu.ch1.current = 0.5  # set CH1 current limit; SCPI: "CH1:CURRent 0.5"
+    print(psu.ch1.voltage)  # query CH1 voltage setting; SCPI: "CH1:VOLTage?"
+    print(psu.ch1.current)  # query CH1 current setting; SCPI: "CH1:CURRent?"
 
     # Measure the live CH1 output, not its configured settings.
-    print(psu.measure.voltage(spd.Channel.CH1))  # SCPI: MEASure:VOLTage? CH1
-    print(psu.measure.current(spd.Channel.CH1))  # SCPI: MEASure:CURRent? CH1
+    print(psu.measure.voltage(spd.Channel.CH1))  # SCPI: "MEASure:VOLTage? CH1"
+    print(psu.measure.current(spd.Channel.CH1))  # SCPI: "MEASure:CURRent? CH1"
 
-    psu.ch1.output = True  # enable CH1 output; SCPI: OUTPut CH1,ON
-    print(psu.ch1.output)  # query CH1 state; SCPI: SYSTem:STATus?
+    psu.ch1.output = True  # enable CH1 output; SCPI: "OUTPut CH1,ON"
+    print(psu.ch1.output)  # query CH1 output; SCPI: "SYSTem:STATus?" -> bit #4
 ```
 
 Every property read performs a fresh hardware query; output state and
@@ -163,14 +163,14 @@ channel additionally exposes an intentional boolean convenience property. Both
 forms share exactly one write implementation:
 
 ```python
-psu.output(spd.Channel.CH1, spd.OutputState.ON)  # regular; OUTP CH1,ON
-psu.ch1.output = True  # convenience; the same OUTP CH1,ON
+psu.output(spd.Channel.CH1, spd.OutputState.ON)  # regular; SCPI: "OUTPut CH1,ON"
+psu.ch1.output = True  # convenience; SCPI: "OUTPut CH1,ON"
 
-status = psu.system.status  # regular; fresh SYST:STAT?
-print(status.ch1.output)  # inspect CH1 output bit 4
+status = psu.system.status  # regular; SCPI: "SYSTem:STATus?"
+print(status.ch1.output)  # inspect bit #4
 
-print(psu.ch1.output)  # convenience; fresh SYST:STAT?, then bit 4
-assert psu.ch2.output is False  # convenience; fresh SYST:STAT?, then bit 5
+print(psu.ch1.output)  # convenience; SCPI: "SYSTem:STATus?" -> bit #4
+assert psu.ch2.output is False  # convenience; SCPI: "SYSTem:STATus?" -> bit #5
 ```
 
 Siglent does not document an `OUTPut?` query. CH1/CH2 state is therefore read
