@@ -284,3 +284,4 @@ python -m pip wheel . --no-deps --wheel-dir dist
 
 Official vendor manuals and application notes used during development are indexed in [`docs/README.md`](docs/README.md), including source URLs and file hashes.
 Hardware tests are opt-in and are not run without an attached supply.
+The ordered physical-device acceptance procedure is maintained in [`.agents/HARDWARE_TESTS.md`](.agents/HARDWARE_TESTS.md).

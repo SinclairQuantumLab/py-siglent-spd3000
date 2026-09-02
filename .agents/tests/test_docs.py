@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 import pytest
@@ -64,3 +65,32 @@ def test_basic_use_shows_scpi_for_each_operation() -> None:
         'SCPI: "SYSTem:STATus?"',
     )
     assert all(command in readme for command in expected)
+
+
+def test_hardware_checklist_is_linked_and_has_stable_unique_ids() -> None:
+    root = Path(__file__).resolve().parents[2]
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    checklist = (root / ".agents" / "HARDWARE_TESTS.md").read_text(encoding="utf-8")
+    assert ".agents/HARDWARE_TESTS.md" in readme
+    identifiers = re.findall(r"`([A-Z0-9]+-[0-9]+)`:", checklist)
+    assert identifiers
+    assert len(identifiers) == len(set(identifiers))
+    prefixes = {identifier.split("-", 1)[0] for identifier in identifiers}
+    assert prefixes == {
+        "CH3",
+        "CON",
+        "END",
+        "FAIL",
+        "GATE",
+        "LOCK",
+        "MEM",
+        "NET",
+        "OUT",
+        "RAW",
+        "READ",
+        "SET",
+        "TIMER",
+        "TRACK",
+        "TRANS",
+        "WAVE",
+    }
