@@ -42,6 +42,9 @@ def test_output_exception_is_documented_for_users() -> None:
     docs = (root / "docs" / "README.md").read_text(encoding="utf-8")
     assert "Intentional `OUTPut` convenience exception" in readme
     assert "API interpretation note: `OUTPut`" in docs
+    assert "The mechanically derived name is always the canonical implementation" in readme
+    assert "API interpretation note: canonical and friendly names" in docs
+    assert "`psu.locked`" in readme
 
 
 def test_basic_use_shows_scpi_for_each_operation() -> None:

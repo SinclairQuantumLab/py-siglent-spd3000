@@ -108,17 +108,31 @@ values are also accepted where documented. Thus channel arguments accept both
 `spd.Channel.CH1` and `"CH1"`, output state accepts both `spd.OutputState.ON`
 and `"ON"`, and tracking mode accepts both `spd.TrackingMode.SERIES` and `1`.
 
-There are deliberate quirks:
+The mechanically derived name is always the canonical implementation. Friendly
+names are additive aliases which delegate to it; they do not contain separate
+validation or I/O logic:
 
-- IEEE common commands lose the leading `*`:
-  `*IDN?` becomes `psu.idn`, `*SAV 1` becomes `psu.save(1)`, `*RCL 1`
-  becomes `psu.recall(1)`, and `*LOCK?` becomes `psu.locked`.
+- `*IDN?` maps directly to `psu.idn` after dropping the leading `*`.
+- `*SAV 1` maps to canonical `psu.sav(1)`; `psu.save(1)` is its readable alias.
+- `*RCL 1` maps to canonical `psu.rcl(1)`; `psu.recall(1)` is its readable alias.
+- `INSTrument CH1` maps directly to `psu.instrument = "CH1"`.
+- `IPaddr` maps to canonical `psu.ipaddr`; `psu.network.host` is its grouped alias.
+- `MASKaddr` maps to canonical `psu.maskaddr`; `psu.network.subnet_mask` is its
+  grouped alias.
+- `GATEaddr` maps to canonical `psu.gateaddr`; `psu.network.gateway` is its
+  grouped alias.
+- `DHCP` maps to canonical `psu.dhcp`; `psu.network.dhcp` is its grouped alias.
+
+The remaining naming and behavior exceptions are explicit:
+
+- `*LOCK` maps exactly to `psu.lock()`, but its query `*LOCK?` maps to
+  `psu.locked`. Python cannot expose `lock` as both a callable method and a
+  boolean property, so the query uses the adjective `locked`.
 - Manual abbreviations such as `MEAS:VOLT?` and `SYST:STAT?` use their expanded
   words in Python: `measure.voltage(channel)` and `system.status`.
-- Network commands are grouped under `psu.network`, so `IPADDR` maps to
-  `psu.network.ip_address` even though the SCPI header has no `NETWork` prefix.
-- `OUTPut` has an intentional convenience API because it is used frequently;
-  see [Intentional `OUTPut` convenience exception](#intentional-output-convenience-exception).
+- `OUTPut` keeps canonical `output(channel, state)` and adds channel convenience
+  properties because it is used frequently; see
+  [Intentional `OUTPut` convenience exception](#intentional-output-convenience-exception).
 - A query is not necessarily a plain string in Python. For example, `*IDN?`,
   `SYST:STAT?`, and `SYST:ERR?` return parsed typed objects.
 
@@ -133,7 +147,8 @@ matches = spd.lookup_command("MEAS:VOLT? CH1")
 info = matches[0]
 
 print(info.canonical_scpi)  # MEASURE:VOLTAGE?
-print(info.python_path)  # measure.voltage(channel)
+print(info.python_path)  # canonical: measure.voltage(channel)
+print(info.python_aliases)  # additional friendly paths, if any
 print(info.access.value)  # read
 print(info.unit)  # V
 print([model.value for model in info.models])
@@ -182,7 +197,7 @@ not report the last commanded CH3 value as if it were measured state.
 ## SCPI-shaped API
 
 ```python
-psu.instrument.channel = spd.Channel.CH1
+psu.instrument = spd.Channel.CH1
 psu.ch1.voltage = 3.3
 voltage = psu.measure.voltage("CH1")
 
@@ -194,8 +209,15 @@ psu.timer.set("CH1", 1, **timer_step)
 timer_step = psu.timer.set("CH1", 1)  # fresh TIMER:SET? query
 psu.timer("CH1", True)
 
+psu.dhcp = False
+psu.ipaddr = "192.168.1.50"
+
+# Friendly aliases delegate to the canonical root properties above.
 psu.network.dhcp = False
-psu.network.ip_address = "192.168.1.50"
+psu.network.host = "192.168.1.50"
+
+psu.sav(1)
+psu.save(1)  # friendly alias for the same *SAV 1 command
 ```
 
 Each channel has timer groups 1 through 5. A group is one timer step containing
@@ -204,9 +226,9 @@ only channel and group to `timer.set()` queries that step and returns an ordinar
 dictionary. Passing all three values writes it. Positional SCPI order is also
 supported: `psu.timer.set("CH1", 1, 3.0, 0.5, 2.0)`.
 
-Network properties accept and return ordinary dotted IPv4 strings. They are
-validated and normalized internally. Setting a static address does not
-silently disable DHCP.
+Canonical and grouped network properties accept and return ordinary dotted
+IPv4 strings. They are validated and normalized by the canonical root
+properties. Setting a static address does not silently disable DHCP.
 
 Use `lookup_command("MEAS:VOLT?")` to discover the corresponding Python path,
 or use `psu.scpi.write()`, `query()`, and `execute()` as an explicit low-level

@@ -78,6 +78,40 @@ def _require_output_state(value: OutputState | str) -> OutputState:
     raise SPD3000ValidationError("state must be OutputState.ON, OutputState.OFF, 'ON', or 'OFF'")
 
 
+def _require_ipv4_address(value: str) -> str:
+    if not isinstance(value, str):
+        raise SPD3000ValidationError("IPv4 address must be a string")
+    try:
+        return str(IPv4Address(value))
+    except AddressValueError as exc:
+        raise SPD3000ValidationError(f"Invalid IPv4 address: {value!r}") from exc
+
+
+def _require_subnet_mask(value: str) -> str:
+    if not isinstance(value, str):
+        raise SPD3000ValidationError("subnet mask must be a string")
+    try:
+        return str(IPv4Network(f"0.0.0.0/{value}").netmask)
+    except (AddressValueError, NetmaskValueError) as exc:
+        raise SPD3000ValidationError(f"Invalid IPv4 subnet mask: {value!r}") from exc
+
+
+def _parse_ipv4_address(command: str, response: str) -> str:
+    value = response.strip()
+    try:
+        return str(IPv4Address(value))
+    except AddressValueError as exc:
+        raise SPD3000ProtocolError(f"Malformed {command} response: {value!r}") from exc
+
+
+def _parse_subnet_mask(response: str) -> str:
+    value = response.strip()
+    try:
+        return str(IPv4Network(f"0.0.0.0/{value}").netmask)
+    except (AddressValueError, NetmaskValueError) as exc:
+        raise SPD3000ProtocolError(f"Malformed MASKADDR? response: {value!r}") from exc
+
+
 def _format_number(
     name: str,
     value: float,
@@ -209,28 +243,6 @@ class Measure:
         selected = _require_channel(channel, programmable=True)
         response = self._device._query(f"MEAS:POWE? {selected.value}")
         return _parse_float("MEAS:POWE?", response)
-
-
-class Instrument:
-    """SCPI ``INSTrument`` subtree."""
-
-    def __init__(self, device: SPD3000) -> None:
-        self._device = device
-
-    @property
-    def channel(self) -> Channel:
-        """Fresh query of the currently selected programmable channel."""
-
-        response = self._device._query("INST?").strip().upper()
-        try:
-            return Channel(response)
-        except ValueError as exc:
-            raise SPD3000ProtocolError(f"Malformed INST? response: {response!r}") from exc
-
-    @channel.setter
-    def channel(self, value: Channel | str) -> None:
-        channel = _require_channel(value, programmable=True)
-        self._device._write(f"INST {channel.value}")
 
 
 class Output:
@@ -390,88 +402,55 @@ class System:
 
 
 class Network:
-    """X/X-E network configuration commands.
+    """Developer-friendly aliases for X/X-E root network commands.
 
-    Address properties accept and return canonical dotted IPv4 strings. The
-    setter validates locally but deliberately does not change DHCP state as a
-    hidden side effect; set ``dhcp = False`` first when assigning static data.
+    The SCPI-derived ``SPD3000.ipaddr``, ``maskaddr``, ``gateaddr``, and
+    ``dhcp`` properties own validation and I/O. These grouped properties only
+    delegate to them and introduce no second implementation.
     """
 
     def __init__(self, device: SPD3000) -> None:
         self._device = device
 
-    def _require(self, command: str) -> None:
-        self._device._require("network", command)
-
-    @staticmethod
-    def _address(value: str) -> str:
-        if not isinstance(value, str):
-            raise SPD3000ValidationError("IPv4 address must be a string")
-        try:
-            return str(IPv4Address(value))
-        except AddressValueError as exc:
-            raise SPD3000ValidationError(f"Invalid IPv4 address: {value!r}") from exc
-
-    @staticmethod
-    def _mask(value: str) -> str:
-        if not isinstance(value, str):
-            raise SPD3000ValidationError("subnet mask must be a string")
-        try:
-            return str(IPv4Network(f"0.0.0.0/{value}").netmask)
-        except (AddressValueError, NetmaskValueError) as exc:
-            raise SPD3000ValidationError(f"Invalid IPv4 subnet mask: {value!r}") from exc
-
-    def _read_address(self, command: str) -> str:
-        response = self._device._query(f"{command}?").strip()
-        try:
-            return str(IPv4Address(response))
-        except AddressValueError as exc:
-            raise SPD3000ProtocolError(f"Malformed {command}? response: {response!r}") from exc
-
     @property
-    def ip_address(self) -> str:
-        self._require("IPaddr?")
-        return self._read_address("IPADDR")
+    def host(self) -> str:
+        """Friendly alias for :attr:`SPD3000.ipaddr`."""
 
-    @ip_address.setter
-    def ip_address(self, value: str) -> None:
-        self._require("IPaddr")
-        self._device._write(f"IPADDR {self._address(value)}")
+        return self._device.ipaddr
+
+    @host.setter
+    def host(self, value: str) -> None:
+        self._device.ipaddr = value
 
     @property
     def subnet_mask(self) -> str:
-        self._require("MASKaddr?")
-        response = self._device._query("MASKADDR?").strip()
-        try:
-            return str(IPv4Network(f"0.0.0.0/{response}").netmask)
-        except (AddressValueError, NetmaskValueError) as exc:
-            raise SPD3000ProtocolError(f"Malformed MASKADDR? response: {response!r}") from exc
+        """Friendly alias for :attr:`SPD3000.maskaddr`."""
+
+        return self._device.maskaddr
 
     @subnet_mask.setter
     def subnet_mask(self, value: str) -> None:
-        self._require("MASKaddr")
-        self._device._write(f"MASKADDR {self._mask(value)}")
+        self._device.maskaddr = value
 
     @property
-    def gateway_address(self) -> str:
-        self._require("GATEaddr?")
-        return self._read_address("GATEADDR")
+    def gateway(self) -> str:
+        """Friendly alias for :attr:`SPD3000.gateaddr`."""
 
-    @gateway_address.setter
-    def gateway_address(self, value: str) -> None:
-        self._require("GATEaddr")
-        self._device._write(f"GATEADDR {self._address(value)}")
+        return self._device.gateaddr
+
+    @gateway.setter
+    def gateway(self, value: str) -> None:
+        self._device.gateaddr = value
 
     @property
     def dhcp(self) -> bool:
-        self._require("DHCP?")
-        return _parse_bool("DHCP?", self._device._query("DHCP?"))
+        """Grouped alias for :attr:`SPD3000.dhcp`."""
+
+        return self._device.dhcp
 
     @dhcp.setter
     def dhcp(self, value: bool) -> None:
-        self._require("DHCP")
-        enabled = _require_bool("dhcp", value)
-        self._device._write(f"DHCP {'ON' if enabled else 'OFF'}")
+        self._device.dhcp = value
 
 
 class RawSCPI:
@@ -506,7 +485,6 @@ class SPD3000:
         self.ch1 = ProgrammableChannel(self, Channel.CH1)
         self.ch2 = ProgrammableChannel(self, Channel.CH2)
         self.ch3 = FixedChannel(self)
-        self.instrument = Instrument(self)
         self.measure = Measure(self)
         self.output = Output(self)
         self.timer = Timer(self)
@@ -683,17 +661,95 @@ class SPD3000:
         return parse_identification(self._query("*IDN?"))
 
     @property
+    def instrument(self) -> Channel:
+        """Fresh ``INSTrument?`` result identifying the selected channel."""
+
+        response = self._query("INST?").strip().upper()
+        try:
+            return Channel(response)
+        except ValueError as exc:
+            raise SPD3000ProtocolError(f"Malformed INST? response: {response!r}") from exc
+
+    @instrument.setter
+    def instrument(self, value: Channel | str) -> None:
+        channel = _require_channel(value, programmable=True)
+        self._write(f"INST {channel.value}")
+
+    @property
+    def ipaddr(self) -> str:
+        """Fresh canonical ``IPaddr?`` query result."""
+
+        self._require("network", "IPaddr?")
+        return _parse_ipv4_address("IPADDR?", self._query("IPADDR?"))
+
+    @ipaddr.setter
+    def ipaddr(self, value: str) -> None:
+        self._require("network", "IPaddr")
+        self._write(f"IPADDR {_require_ipv4_address(value)}")
+
+    @property
+    def maskaddr(self) -> str:
+        """Fresh canonical ``MASKaddr?`` query result."""
+
+        self._require("network", "MASKaddr?")
+        return _parse_subnet_mask(self._query("MASKADDR?"))
+
+    @maskaddr.setter
+    def maskaddr(self, value: str) -> None:
+        self._require("network", "MASKaddr")
+        self._write(f"MASKADDR {_require_subnet_mask(value)}")
+
+    @property
+    def gateaddr(self) -> str:
+        """Fresh canonical ``GATEaddr?`` query result."""
+
+        self._require("network", "GATEaddr?")
+        return _parse_ipv4_address("GATEADDR?", self._query("GATEADDR?"))
+
+    @gateaddr.setter
+    def gateaddr(self, value: str) -> None:
+        self._require("network", "GATEaddr")
+        self._write(f"GATEADDR {_require_ipv4_address(value)}")
+
+    @property
+    def dhcp(self) -> bool:
+        """Fresh canonical ``DHCP?`` query result."""
+
+        self._require("network", "DHCP?")
+        return _parse_bool("DHCP?", self._query("DHCP?"))
+
+    @dhcp.setter
+    def dhcp(self, value: bool) -> None:
+        self._require("network", "DHCP")
+        enabled = _require_bool("dhcp", value)
+        self._write(f"DHCP {'ON' if enabled else 'OFF'}")
+
+    @property
     def locked(self) -> bool:
-        """Fresh X/X-E front-panel lock state."""
+        """Fresh ``*LOCK?`` state; named differently because ``lock()`` is callable."""
 
         self._require("lock_query", "*LOCK?")
         return _parse_bool("*LOCK?", self._query("*LOCK?"))
 
-    def save(self, slot: int) -> None:
+    def sav(self, slot: int) -> None:
+        """Execute canonical ``*SAV <slot>``."""
+
         self._write(f"*SAV {self._slot(slot)}")
 
-    def recall(self, slot: int) -> None:
+    def rcl(self, slot: int) -> None:
+        """Execute canonical ``*RCL <slot>``."""
+
         self._write(f"*RCL {self._slot(slot)}")
+
+    def save(self, slot: int) -> None:
+        """Developer-friendly alias for :meth:`sav`."""
+
+        self.sav(slot)
+
+    def recall(self, slot: int) -> None:
+        """Developer-friendly alias for :meth:`rcl`."""
+
+        self.rcl(slot)
 
     def lock(self) -> None:
         self._write("*LOCK")

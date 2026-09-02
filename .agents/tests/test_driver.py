@@ -210,27 +210,49 @@ def test_network_uses_validated_strings() -> None:
         responses_for(
             "SPD3303X",
             **{
-                "IPADDR?": ["192.168.001.050", "192.168.1.50"],
+                "IPADDR?": ["192.168.1.50", "192.168.001.050"],
                 "MASKADDR?": ["255.255.255.0"],
+                "GATEADDR?": ["192.168.1.1"],
                 "DHCP?": ["OFF"],
             },
         )
     )
     psu = SPD3000(executor)
 
-    psu.network.ip_address = "192.168.1.50"
+    psu.ipaddr = "192.168.1.50"
     psu.network.subnet_mask = "255.255.255.0"
-    assert executor.commands[-2:] == ["IPADDR 192.168.1.50", "MASKADDR 255.255.255.0"]
-    assert psu.network.subnet_mask == "255.255.255.0"
+    psu.network.gateway = "192.168.1.1"
+    psu.dhcp = False
+    assert executor.commands[-4:] == [
+        "IPADDR 192.168.1.50",
+        "MASKADDR 255.255.255.0",
+        "GATEADDR 192.168.1.1",
+        "DHCP OFF",
+    ]
+    assert psu.network.host == "192.168.1.50"
+    assert psu.maskaddr == "255.255.255.0"
+    assert psu.network.gateway == "192.168.1.1"
     assert psu.network.dhcp is False
 
     before = list(executor.commands)
     with pytest.raises(SPD3000ValidationError):
-        psu.network.gateway_address = "999.1.1.1"
+        psu.network.gateway = "999.1.1.1"
     assert executor.commands == before
 
     with pytest.raises(SPD3000ProtocolError):
-        _ = psu.network.ip_address
+        _ = psu.ipaddr
+
+
+def test_canonical_and_friendly_memory_names_share_implementation() -> None:
+    executor = FakeExecutor(responses_for("SPD3303X"))
+    psu = SPD3000(executor)
+
+    psu.sav(1)
+    psu.save(2)
+    psu.rcl(3)
+    psu.recall(4)
+
+    assert executor.commands[-4:] == ["*SAV 1", "*SAV 2", "*RCL 3", "*RCL 4"]
 
 
 def test_c_unsupported_features_fail_before_io() -> None:
@@ -240,7 +262,8 @@ def test_c_unsupported_features_fail_before_io() -> None:
 
     operations = [
         lambda: psu.measure.power("CH1"),
-        lambda: psu.network.ip_address,
+        lambda: psu.ipaddr,
+        lambda: psu.network.host,
         lambda: psu.timer("CH1", True),
         lambda: psu.output.wave("CH1", True),
         lambda: psu.locked,
@@ -277,20 +300,23 @@ def test_timer_mapping_and_output_commands() -> None:
 
 
 def test_channel_strings_are_accepted_consistently() -> None:
-    executor = FakeExecutor(responses_for("SPD3303X"))
+    executor = FakeExecutor(responses_for("SPD3303X", **{"INST?": ["CH1"]}))
     psu = SPD3000(executor)
 
-    psu.instrument.channel = "ch2"
+    psu.instrument = "ch2"
     psu.output(" ch1 ", "on")
     psu.output.wave("ch2", False)
     psu.timer("CH1", False)
+    selected = psu.instrument
 
-    assert executor.commands[-4:] == [
+    assert executor.commands[-5:] == [
         "INST CH2",
         "OUTP CH1,ON",
         "OUTP:WAVE CH2,OFF",
         "TIMER CH1,OFF",
+        "INST?",
     ]
+    assert selected is Channel.CH1
 
 
 def test_raw_enum_values_are_validated_before_io() -> None:

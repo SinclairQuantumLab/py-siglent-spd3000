@@ -35,5 +35,19 @@ def test_common_command_lookup_drops_leading_asterisk() -> None:
 def test_command_registry_filters_model_capabilities() -> None:
     c_paths = {command.python_path for command in iter_commands(Model.SPD3303C)}
     assert "measure.power(channel)" not in c_paths
-    assert "network.ip_address" not in c_paths
-    assert "output(channel, state); ch1/ch2/ch3.output" in c_paths
+    assert "ipaddr" not in c_paths
+    assert "output(channel, state)" in c_paths
+
+
+def test_registry_separates_canonical_paths_from_friendly_aliases() -> None:
+    ipaddr = lookup_command("IPADDR")[0]
+    assert ipaddr.python_path == "ipaddr"
+    assert ipaddr.python_aliases == ("network.host",)
+
+    sav = lookup_command("*SAV 1")[0]
+    assert sav.python_path == "sav(slot)"
+    assert sav.python_aliases == ("save(slot)",)
+
+    output = lookup_command("OUTP")[0]
+    assert output.python_path == "output(channel, state)"
+    assert output.python_aliases == ("ch1.output", "ch2.output", "ch3.output")

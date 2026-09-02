@@ -39,6 +39,23 @@ official source were checked, not necessarily the document publication date.
 Firmware binaries are intentionally excluded: they are not build inputs and
 are hardware-revision-sensitive.
 
+## API interpretation note: canonical and friendly names
+
+SCPI-derived root names own validation and instrument I/O. Modernized names are
+thin, developer-friendly aliases:
+
+- `sav(slot)` -> `save(slot)`
+- `rcl(slot)` -> `recall(slot)`
+- `ipaddr` -> `network.host`
+- `maskaddr` -> `network.subnet_mask`
+- `gateaddr` -> `network.gateway`
+- `dhcp` -> `network.dhcp`
+
+`*LOCK`/`*LOCK?` is the necessary naming exception: `lock()` sends the command,
+while `locked` performs the query because one Python member cannot be both a
+method and a boolean property. The complete mapping and rationale are in the
+project README.
+
 ## API interpretation note: `OUTPut`
 
 The driver normally mirrors the canonical SCPI tree. `OUTPut` is the explicit

@@ -155,8 +155,13 @@ def _run(args: argparse.Namespace) -> int:
     if args.command == "lookup":
         matches = lookup_command(args.scpi)
         for info in matches:
+            alias_text = (
+                f" (Python aliases: {', '.join(info.python_aliases)})"
+                if info.python_aliases
+                else ""
+            )
             print(
-                f"{info.canonical_scpi}: {info.python_path} "
+                f"{info.canonical_scpi}: {info.python_path}{alias_text} "
                 f"[{info.access.value}; {', '.join(model.value for model in info.models)}]"
             )
         return 0 if matches else 1

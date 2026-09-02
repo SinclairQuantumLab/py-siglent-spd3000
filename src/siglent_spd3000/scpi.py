@@ -23,7 +23,11 @@ X_MODELS = (Model.SPD3303X, Model.SPD3303X_E)
 
 @dataclass(frozen=True)
 class CommandInfo:
-    """Relationship between a documented SCPI command and the Python API."""
+    """A SCPI command's canonical Python path and any additive friendly aliases.
+
+    ``aliases`` contains accepted SCPI abbreviations, while ``python_aliases``
+    contains Python paths which delegate to ``python_path``.
+    """
 
     canonical_scpi: str
     python_path: str
@@ -31,6 +35,7 @@ class CommandInfo:
     unit: str | None
     models: tuple[Model, ...]
     source: str
+    python_aliases: tuple[str, ...] = ()
     aliases: tuple[str, ...] = ()
 
 
@@ -42,16 +47,17 @@ def _command(
     unit: str | None = None,
     models: tuple[Model, ...] = ALL_MODELS,
     source: str = "SPD3303X/SPD3303C Quick Start",
+    python_aliases: tuple[str, ...] = (),
     aliases: tuple[str, ...] = (),
 ) -> CommandInfo:
-    return CommandInfo(canonical, path, access, unit, models, source, aliases)
+    return CommandInfo(canonical, path, access, unit, models, source, python_aliases, aliases)
 
 
 COMMANDS: tuple[CommandInfo, ...] = (
     _command("*IDN?", "idn", Access.READ),
-    _command("*SAV", "save(slot)", Access.WRITE),
-    _command("*RCL", "recall(slot)", Access.WRITE),
-    _command("INSTRUMENT", "instrument.channel", Access.READ_WRITE, aliases=("INST",)),
+    _command("*SAV", "sav(slot)", Access.WRITE, python_aliases=("save(slot)",)),
+    _command("*RCL", "rcl(slot)", Access.WRITE, python_aliases=("recall(slot)",)),
+    _command("INSTRUMENT", "instrument", Access.READ_WRITE, aliases=("INST",)),
     _command(
         "MEASURE:CURRENT?",
         "measure.current(channel)",
@@ -79,7 +85,11 @@ COMMANDS: tuple[CommandInfo, ...] = (
     _command("CH2:CURRENT", "ch2.current", Access.READ_WRITE, unit="A", aliases=("CH2:CURR",)),
     _command("CH2:VOLTAGE", "ch2.voltage", Access.READ_WRITE, unit="V", aliases=("CH2:VOLT",)),
     _command(
-        "OUTPUT", "output(channel, state); ch1/ch2/ch3.output", Access.WRITE, aliases=("OUTP",)
+        "OUTPUT",
+        "output(channel, state)",
+        Access.WRITE,
+        python_aliases=("ch1.output", "ch2.output", "ch3.output"),
+        aliases=("OUTP",),
     ),
     _command("OUTPUT:TRACK", "output.track(mode)", Access.WRITE, aliases=("OUTP:TRACK",)),
     _command(
@@ -100,14 +110,37 @@ COMMANDS: tuple[CommandInfo, ...] = (
     _command("SYSTEM:ERROR?", "system.error", Access.READ, aliases=("SYST:ERR?",)),
     _command("SYSTEM:VERSION?", "system.version", Access.READ, aliases=("SYST:VERS?",)),
     _command("SYSTEM:STATUS?", "system.status", Access.READ, aliases=("SYST:STAT?",)),
-    _command("IPADDR", "network.ip_address", Access.READ_WRITE, models=X_MODELS, aliases=("IP",)),
     _command(
-        "MASKADDR", "network.subnet_mask", Access.READ_WRITE, models=X_MODELS, aliases=("MASK",)
+        "IPADDR",
+        "ipaddr",
+        Access.READ_WRITE,
+        models=X_MODELS,
+        python_aliases=("network.host",),
+        aliases=("IP",),
     ),
     _command(
-        "GATEADDR", "network.gateway_address", Access.READ_WRITE, models=X_MODELS, aliases=("GATE",)
+        "MASKADDR",
+        "maskaddr",
+        Access.READ_WRITE,
+        models=X_MODELS,
+        python_aliases=("network.subnet_mask",),
+        aliases=("MASK",),
     ),
-    _command("DHCP", "network.dhcp", Access.READ_WRITE, models=X_MODELS),
+    _command(
+        "GATEADDR",
+        "gateaddr",
+        Access.READ_WRITE,
+        models=X_MODELS,
+        python_aliases=("network.gateway",),
+        aliases=("GATE",),
+    ),
+    _command(
+        "DHCP",
+        "dhcp",
+        Access.READ_WRITE,
+        models=X_MODELS,
+        python_aliases=("network.dhcp",),
+    ),
     _command(
         "*LOCK", "lock()", Access.WRITE, source="SPD Local Front Panel Lock Out SCPI commands"
     ),
