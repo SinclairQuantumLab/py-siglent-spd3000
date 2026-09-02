@@ -1,10 +1,11 @@
-# Python-generated files
 __pycache__/
-*.py[oc]
+*.py[cod]
+*.egg-info/
+.coverage
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
 build/
 dist/
-wheels/
-*.egg-info
-
-# Virtual environments
-.venv
+src/siglent_spd3000/_build_commit.py
