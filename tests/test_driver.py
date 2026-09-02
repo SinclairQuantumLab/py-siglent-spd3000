@@ -12,7 +12,6 @@ from siglent_spd3000 import (
     SPD3000ProtocolError,
     SPD3000TimingWarning,
     SPD3000ValidationError,
-    TimerStep,
     TrackingMode,
     UnsupportedFeatureError,
 )
@@ -154,13 +153,25 @@ def test_c_status_has_no_timer_or_waveform_state() -> None:
     assert status.ch2.waveform is None
 
 
-def test_measurement_properties_always_query() -> None:
-    executor = FakeExecutor(responses_for("SPD3303X", **{"MEAS:VOLT? CH1": ["1.0", "2.0"]}))
+def test_measurement_methods_keep_channel_as_an_argument_and_always_query() -> None:
+    executor = FakeExecutor(
+        responses_for(
+            "SPD3303X",
+            **{
+                "MEAS:VOLT? CH1": ["1.0", "2.0"],
+                "MEAS:CURR? CH2": ["0.25"],
+                "MEAS:POWE? CH1": ["3.5"],
+            },
+        )
+    )
     psu = SPD3000(executor)
 
-    assert psu.measure.ch1.voltage == 1.0
-    assert psu.measure.ch1.voltage == 2.0
+    assert psu.measure.voltage(Channel.CH1) == 1.0
+    assert psu.measure.voltage("ch1") == 2.0
+    assert psu.measure.current(" CH2 ") == 0.25
+    assert psu.measure.power(Channel.CH1) == 3.5
     assert executor.commands.count("MEAS:VOLT? CH1") == 2
+    assert not hasattr(psu.measure, "ch1")
 
 
 @pytest.mark.parametrize(
@@ -220,10 +231,10 @@ def test_c_unsupported_features_fail_before_io() -> None:
     baseline = list(executor.commands)
 
     operations = [
-        lambda: psu.measure.ch1.power,
+        lambda: psu.measure.power("CH1"),
         lambda: psu.network.ip_address,
-        lambda: psu.timer(Channel.CH1, True),
-        lambda: psu.output.wave(Channel.CH1, True),
+        lambda: psu.timer("CH1", True),
+        lambda: psu.output.wave("CH1", True),
         lambda: psu.locked,
     ]
     for operation in operations:
@@ -236,16 +247,62 @@ def test_timer_mapping_and_output_commands() -> None:
     executor = FakeExecutor(responses_for("SPD3303X-E", **{"TIMER:SET? CH1,1": ["3,0.5,2"]}))
     psu = SPD3000(executor)
 
-    psu.timer.set[Channel.CH1, 1] = TimerStep(3.0, 0.5, 2.0)
-    psu.timer(Channel.CH1, True)
+    timer_step = {"voltage_v": 3.0, "current_a": 0.5, "duration_s": 2.0}
+    psu.timer.set(Channel.CH1, 1, **timer_step)
+    psu.timer.set("ch1", 2, 3.0, 0.5, 2.0)
+    psu.timer("ch1", True)
     psu.output.track(TrackingMode.PARALLEL)
+    psu.output.track(1)
 
-    assert executor.commands[-3:] == [
+    assert executor.commands[-5:] == [
         "TIMER:SET CH1,1,3,0.5,2",
+        "TIMER:SET CH1,2,3,0.5,2",
         "TIMER CH1,ON",
         "OUTP:TRACK 2",
+        "OUTP:TRACK 1",
     ]
-    assert psu.timer.set[Channel.CH1, 1] == TimerStep(3.0, 0.5, 2.0)
+    assert psu.timer.set("CH1", 1) == {
+        "voltage_v": 3.0,
+        "current_a": 0.5,
+        "duration_s": 2.0,
+    }
+
+
+def test_channel_strings_are_accepted_consistently() -> None:
+    executor = FakeExecutor(responses_for("SPD3303X"))
+    psu = SPD3000(executor)
+
+    psu.instrument.channel = "ch2"
+    psu.output(" ch1 ", True)
+    psu.output.wave("ch2", False)
+    psu.timer("CH1", False)
+
+    assert executor.commands[-4:] == [
+        "INST CH2",
+        "OUTP CH1,ON",
+        "OUTP:WAVE CH2,OFF",
+        "TIMER CH1,OFF",
+    ]
+
+
+def test_raw_enum_values_are_validated_before_io() -> None:
+    executor = FakeExecutor(responses_for("SPD3303X"))
+    psu = SPD3000(executor)
+    baseline = list(executor.commands)
+
+    for invalid_channel in ("CH4", "", 1):
+        with pytest.raises(SPD3000ValidationError, match="channel"):
+            psu.measure.voltage(invalid_channel)  # type: ignore[arg-type]
+        assert executor.commands == baseline
+
+    for invalid_mode in (True, 3, "1"):
+        with pytest.raises(SPD3000ValidationError, match="mode"):
+            psu.output.track(invalid_mode)  # type: ignore[arg-type]
+        assert executor.commands == baseline
+
+    with pytest.raises(SPD3000ValidationError, match="supplied together"):
+        psu.timer.set("CH1", 1, 3.0)
+    assert executor.commands == baseline
 
 
 def test_identity_and_system_error_are_fresh_queries() -> None:

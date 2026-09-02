@@ -6,6 +6,7 @@ import math
 from collections.abc import Sequence
 from decimal import Decimal, InvalidOperation
 from ipaddress import AddressValueError, IPv4Address, IPv4Network, NetmaskValueError
+from typing import overload
 
 from .exceptions import (
     SPD3000ProtocolError,
@@ -30,7 +31,6 @@ from .models import (
     Identification,
     SystemError,
     SystemStatus,
-    TimerStep,
     TrackingMode,
     parse_identification,
     parse_status,
@@ -39,12 +39,25 @@ from .models import (
 from .transport import SocketTransport, VisaTransport, VXI11Transport
 
 
-def _require_channel(value: Channel, *, programmable: bool = False) -> Channel:
-    if not isinstance(value, Channel):
-        raise SPD3000ValidationError("channel must be a Channel enum value")
-    if programmable and value is Channel.CH3:
+def _require_channel(value: Channel | str, *, programmable: bool = False) -> Channel:
+    if isinstance(value, Channel):
+        channel = value
+    elif isinstance(value, str):
+        try:
+            channel = Channel(value.strip().upper())
+        except ValueError as exc:
+            raise SPD3000ValidationError("channel must be CH1, CH2, or CH3") from exc
+    else:
+        raise SPD3000ValidationError("channel must be a Channel enum value or string")
+    if programmable and channel is Channel.CH3:
         raise SPD3000ValidationError("CH3 has no programmable voltage or current")
-    return value
+    return channel
+
+
+def _require_timer_group(group: int) -> int:
+    if isinstance(group, bool) or not isinstance(group, int) or not 1 <= group <= 5:
+        raise SPD3000ValidationError("timer group must be an integer from 1 through 5")
+    return group
 
 
 def _require_bool(name: str, value: bool) -> bool:
@@ -132,42 +145,33 @@ class FixedChannel:
     channel = Channel.CH3
 
 
-class MeasurementChannel:
-    """One channel under the SCPI ``MEASure`` query subtree."""
-
-    def __init__(self, device: SPD3000, channel: Channel) -> None:
-        self._device = device
-        self._channel = _require_channel(channel, programmable=True)
-
-    @property
-    def voltage(self) -> float:
-        """Fresh measured voltage in volts."""
-
-        response = self._device._query(f"MEAS:VOLT? {self._channel.value}")
-        return _parse_float("MEAS:VOLT?", response)
-
-    @property
-    def current(self) -> float:
-        """Fresh measured current in amperes."""
-
-        response = self._device._query(f"MEAS:CURR? {self._channel.value}")
-        return _parse_float("MEAS:CURR?", response)
-
-    @property
-    def power(self) -> float:
-        """Fresh measured power in watts; unavailable on SPD3303C."""
-
-        self._device._require("measure_power", "MEASure:POWer")
-        response = self._device._query(f"MEAS:POWE? {self._channel.value}")
-        return _parse_float("MEAS:POWE?", response)
-
-
 class Measure:
-    """SCPI ``MEASure`` subtree."""
+    """SCPI ``MEASure`` subtree; SCPI arguments remain Python arguments."""
 
     def __init__(self, device: SPD3000) -> None:
-        self.ch1 = MeasurementChannel(device, Channel.CH1)
-        self.ch2 = MeasurementChannel(device, Channel.CH2)
+        self._device = device
+
+    def voltage(self, channel: Channel | str) -> float:
+        """Query ``MEASure:VOLTage? <channel>`` and return volts."""
+
+        selected = _require_channel(channel, programmable=True)
+        response = self._device._query(f"MEAS:VOLT? {selected.value}")
+        return _parse_float("MEAS:VOLT?", response)
+
+    def current(self, channel: Channel | str) -> float:
+        """Query ``MEASure:CURRent? <channel>`` and return amperes."""
+
+        selected = _require_channel(channel, programmable=True)
+        response = self._device._query(f"MEAS:CURR? {selected.value}")
+        return _parse_float("MEAS:CURR?", response)
+
+    def power(self, channel: Channel | str) -> float:
+        """Query ``MEASure:POWer? <channel>``; unavailable on SPD3303C."""
+
+        self._device._require("measure_power", "MEASure:POWer")
+        selected = _require_channel(channel, programmable=True)
+        response = self._device._query(f"MEAS:POWE? {selected.value}")
+        return _parse_float("MEAS:POWE?", response)
 
 
 class Instrument:
@@ -187,7 +191,7 @@ class Instrument:
             raise SPD3000ProtocolError(f"Malformed INST? response: {response!r}") from exc
 
     @channel.setter
-    def channel(self, value: Channel) -> None:
+    def channel(self, value: Channel | str) -> None:
         channel = _require_channel(value, programmable=True)
         self._device._write(f"INST {channel.value}")
 
@@ -200,6 +204,7 @@ class Output:
     both the canonical callable form and per-channel properties::
 
         psu.output(Channel.CH1, True)
+        psu.output("CH1", True)
         psu.output.ch1 = True
         print(psu.output.ch1)
 
@@ -213,7 +218,7 @@ class Output:
     def __init__(self, device: SPD3000) -> None:
         self._device = device
 
-    def __call__(self, channel: Channel, state: bool) -> None:
+    def __call__(self, channel: Channel | str, state: bool) -> None:
         """Turn a channel output on or off using ``OUTPut <channel>,<state>``."""
 
         selected = _require_channel(channel)
@@ -258,14 +263,20 @@ class Output:
     def ch3(self, state: bool) -> None:
         self(Channel.CH3, state)
 
-    def track(self, mode: TrackingMode) -> None:
-        """Select independent, series, or parallel ``OUTPut:TRACK`` mode."""
+    def track(self, mode: TrackingMode | int) -> None:
+        """Set ``OUTPut:TRACK`` from the recommended enum or raw integer 0-2."""
 
-        if not isinstance(mode, TrackingMode):
-            raise SPD3000ValidationError("mode must be a TrackingMode enum value")
-        self._device._write(f"OUTP:TRACK {mode.value}")
+        if isinstance(mode, bool) or not isinstance(mode, (TrackingMode, int)):
+            raise SPD3000ValidationError("mode must be a TrackingMode or integer 0, 1, or 2")
+        try:
+            selected = TrackingMode(mode)
+        except ValueError as exc:
+            raise SPD3000ValidationError(
+                "mode must be a TrackingMode or integer 0, 1, or 2"
+            ) from exc
+        self._device._write(f"OUTP:TRACK {selected.value}")
 
-    def wave(self, channel: Channel, state: bool) -> None:
+    def wave(self, channel: Channel | str, state: bool) -> None:
         """Set X/X-E waveform display state for CH1 or CH2."""
 
         self._device._require("waveform", "OUTPut:WAVE")
@@ -274,60 +285,76 @@ class Output:
         self._device._write(f"OUTP:WAVE {selected.value},{'ON' if enabled else 'OFF'}")
 
 
-class TimerSet:
-    """Mapping-like ``TIMEr:SET`` query/write subtree indexed by channel and group."""
-
-    def __init__(self, device: SPD3000) -> None:
-        self._device = device
-
-    @staticmethod
-    def _key(key: tuple[Channel, int]) -> tuple[Channel, int]:
-        if not isinstance(key, tuple) or len(key) != 2:
-            raise SPD3000ValidationError("timer.set key must be (Channel, group)")
-        channel = _require_channel(key[0], programmable=True)
-        group = key[1]
-        if isinstance(group, bool) or not isinstance(group, int) or not 1 <= group <= 5:
-            raise SPD3000ValidationError("timer group must be an integer from 1 through 5")
-        return channel, group
-
-    def __getitem__(self, key: tuple[Channel, int]) -> TimerStep:
-        self._device._require("timer", "TIMEr:SET?")
-        channel, group = self._key(key)
-        response = self._device._query(f"TIMER:SET? {channel.value},{group}")
-        parts = [part.strip() for part in response.split(",")]
-        if len(parts) != 3:
-            raise SPD3000ProtocolError(f"Malformed TIMER:SET? response: {response!r}")
-        return TimerStep(
-            voltage=_parse_float("TIMER:SET? voltage", parts[0]),
-            current=_parse_float("TIMER:SET? current", parts[1]),
-            time=_parse_float("TIMER:SET? time", parts[2]),
-        )
-
-    def __setitem__(self, key: tuple[Channel, int], value: TimerStep) -> None:
-        self._device._require("timer", "TIMEr:SET")
-        channel, group = self._key(key)
-        if not isinstance(value, TimerStep):
-            raise SPD3000ValidationError("timer value must be TimerStep")
-        voltage = self._device._setpoint("voltage", value.voltage)
-        current = self._device._setpoint("current", value.current)
-        duration = _format_number(
-            "time", value.time, minimum=Decimal("0"), maximum=Decimal("10000")
-        )
-        self._device._write(f"TIMER:SET {channel.value},{group},{voltage},{current},{duration}")
-
-
 class Timer:
     """SCPI ``TIMEr`` subtree; calling it controls the timer output state."""
 
     def __init__(self, device: SPD3000) -> None:
         self._device = device
-        self.set = TimerSet(device)
 
-    def __call__(self, channel: Channel, state: bool) -> None:
+    def __call__(self, channel: Channel | str, state: bool) -> None:
         self._device._require("timer", "TIMEr")
         selected = _require_channel(channel, programmable=True)
         enabled = _require_bool("state", state)
         self._device._write(f"TIMER {selected.value},{'ON' if enabled else 'OFF'}")
+
+    @overload
+    def set(self, channel: Channel | str, group: int) -> dict[str, float]: ...
+
+    @overload
+    def set(
+        self,
+        channel: Channel | str,
+        group: int,
+        voltage_v: float,
+        current_a: float,
+        duration_s: float,
+    ) -> None: ...
+
+    def set(
+        self,
+        channel: Channel | str,
+        group: int,
+        voltage_v: float | None = None,
+        current_a: float | None = None,
+        duration_s: float | None = None,
+    ) -> dict[str, float] | None:
+        """Query or write one of the five ``TIMEr:SET`` groups.
+
+        With only ``channel`` and ``group``, issue ``TIMEr:SET?`` and return a
+        built-in dictionary. Supplying voltage, current, and duration issues
+        ``TIMEr:SET``. The three write values may be positional or keyword
+        arguments, including an ordinary ``**timer_step`` dictionary.
+        """
+
+        self._device._require("timer", "TIMEr:SET")
+        selected = _require_channel(channel, programmable=True)
+        selected_group = _require_timer_group(group)
+        values = (voltage_v, current_a, duration_s)
+        if all(value is None for value in values):
+            response = self._device._query(f"TIMER:SET? {selected.value},{selected_group}")
+            parts = [part.strip() for part in response.split(",")]
+            if len(parts) != 3:
+                raise SPD3000ProtocolError(f"Malformed TIMER:SET? response: {response!r}")
+            return {
+                "voltage_v": _parse_float("TIMER:SET? voltage", parts[0]),
+                "current_a": _parse_float("TIMER:SET? current", parts[1]),
+                "duration_s": _parse_float("TIMER:SET? time", parts[2]),
+            }
+        if any(value is None for value in values):
+            raise SPD3000ValidationError(
+                "voltage_v, current_a, and duration_s must be supplied together"
+            )
+
+        assert voltage_v is not None and current_a is not None and duration_s is not None
+        voltage = self._device._setpoint("voltage", voltage_v)
+        current = self._device._setpoint("current", current_a)
+        duration = _format_number(
+            "duration_s", duration_s, minimum=Decimal("0"), maximum=Decimal("10000")
+        )
+        self._device._write(
+            f"TIMER:SET {selected.value},{selected_group},{voltage},{current},{duration}"
+        )
+        return None
 
 
 class System:

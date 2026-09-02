@@ -54,21 +54,21 @@ COMMANDS: tuple[CommandInfo, ...] = (
     _command("INSTRUMENT", "instrument.channel", Access.READ_WRITE, aliases=("INST",)),
     _command(
         "MEASURE:CURRENT?",
-        "measure.ch1.current / measure.ch2.current",
+        "measure.current(channel)",
         Access.READ,
         unit="A",
         aliases=("MEAS:CURR?",),
     ),
     _command(
         "MEASURE:VOLTAGE?",
-        "measure.ch1.voltage / measure.ch2.voltage",
+        "measure.voltage(channel)",
         Access.READ,
         unit="V",
         aliases=("MEAS:VOLT?",),
     ),
     _command(
         "MEASURE:POWER?",
-        "measure.ch1.power / measure.ch2.power",
+        "measure.power(channel)",
         Access.READ,
         unit="W",
         models=X_MODELS,
@@ -91,7 +91,11 @@ COMMANDS: tuple[CommandInfo, ...] = (
     ),
     _command("TIMER", "timer(channel, state)", Access.WRITE, models=X_MODELS),
     _command(
-        "TIMER:SET", "timer.set[channel, group]", Access.READ_WRITE, unit="V,A,s", models=X_MODELS
+        "TIMER:SET",
+        "timer.set(channel, group[, voltage_v, current_a, duration_s])",
+        Access.READ_WRITE,
+        unit="V,A,s",
+        models=X_MODELS,
     ),
     _command("SYSTEM:ERROR?", "system.error", Access.READ, aliases=("SYST:ERR?",)),
     _command("SYSTEM:VERSION?", "system.version", Access.READ, aliases=("SYST:VERS?",)),

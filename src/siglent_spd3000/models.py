@@ -87,15 +87,6 @@ class Capabilities:
 
 
 @dataclass(frozen=True)
-class TimerStep:
-    """One ``TIMEr:SET`` entry; values use volts, amperes, and seconds."""
-
-    voltage: float
-    current: float
-    time: float
-
-
-@dataclass(frozen=True)
 class ChannelStatus:
     """Status fields available for one programmable channel."""
 

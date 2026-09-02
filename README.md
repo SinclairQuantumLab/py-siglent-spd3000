@@ -37,8 +37,8 @@ from siglent_spd3000 import SPD3000
 with SPD3000.connect("socket", "192.168.1.50") as psu:
     psu.ch1.voltage = 5.0
     psu.ch1.current = 0.5
-    print(psu.measure.ch1.voltage)
-    print(psu.measure.ch1.current)
+    print(psu.measure.voltage("CH1"))
+    print(psu.measure.current("CH1"))
     psu.output.ch1 = True
 ```
 
@@ -76,23 +76,26 @@ limitations before I/O.
 ### 1. Guess the Python path from the SCPI command line
 
 As a first approximation, expand abbreviated SCPI headers, make them lowercase,
-and replace `:` with `.`. A trailing `?` means a read, which is normally a
-property access; a value-taking command is normally a property assignment or a
-method call.
+and replace `:` with `.`. SCPI arguments remain Python arguments. A trailing `?`
+means a read: a query without arguments is normally a property, while a query
+with arguments is normally a method call. A value-taking command is normally a
+property assignment or method call.
 
 | Manual command | Action and arguments | Python API |
 | --- | --- | --- |
 | `CH1:VOLTage 5` | Set the CH1 source voltage to 5 V | `psu.ch1.voltage = 5.0` |
 | `CH1:VOLTage?` | Read the CH1 voltage setpoint | `setpoint = psu.ch1.voltage` |
-| `MEASure:VOLTage? CH1` | Measure voltage; `CH1` selects the channel | `measured = psu.measure.ch1.voltage` |
+| `MEASure:VOLTage? CH1` | Measure voltage; `CH1` selects the channel | `measured = psu.measure.voltage("CH1")` |
 | `SYSTem:STATus?` | Read and decode the instrument status word | `status = psu.system.status` |
 | `OUTPut:TRACK 1` | Select series tracking mode | `psu.output.track(spd.TrackingMode.SERIES)` |
-| `TIMEr:SET CH1,1,3,0.5,2` | Set CH1 timer group 1 to 3 V, 0.5 A, 2 s | `psu.timer.set[spd.Channel.CH1, 1] = spd.TimerStep(3.0, 0.5, 2.0)` |
+| `TIMEr:SET CH1,1,3,0.5,2` | Set CH1 timer group 1 to 3 V, 0.5 A, 2 s | `psu.timer.set("CH1", 1, 3.0, 0.5, 2.0)` |
+| `TIMEr:SET? CH1,1` | Query CH1 timer group 1 | `timer_step = psu.timer.set("CH1", 1)` |
 
-Arguments determine the final Python shape. A channel argument commonly becomes
-a channel subtree, a single value commonly becomes an assignment, and an action
-with several arguments commonly becomes a method call or a typed value such as
-`TimerStep`.
+Arguments determine the final Python shape but keep their SCPI order. Enum
+members are recommended for discoverability and type checking; their raw SCPI
+values are also accepted where documented. Thus channel arguments accept both
+`spd.Channel.CH1` and `"CH1"`, while tracking mode accepts both
+`spd.TrackingMode.SERIES` and `1`.
 
 There are deliberate quirks:
 
@@ -100,7 +103,7 @@ There are deliberate quirks:
   `*IDN?` becomes `psu.identity`, `*SAV 1` becomes `psu.save(1)`, `*RCL 1`
   becomes `psu.recall(1)`, and `*LOCK?` becomes `psu.locked`.
 - Manual abbreviations such as `MEAS:VOLT?` and `SYST:STAT?` use their expanded
-  words in Python: `measure.voltage` and `system.status`.
+  words in Python: `measure.voltage(channel)` and `system.status`.
 - Network commands are grouped under `psu.network`, so `IPADDR` maps to
   `psu.network.ip_address` even though the SCPI header has no `NETWork` prefix.
 - `OUTPut` has an intentional convenience API because it is used frequently;
@@ -119,13 +122,14 @@ matches = spd.lookup_command("MEAS:VOLT? CH1")
 info = matches[0]
 
 print(info.canonical_scpi)  # MEASURE:VOLTAGE?
-print(info.python_path)  # measure.ch1.voltage / measure.ch2.voltage
+print(info.python_path)  # measure.voltage(channel)
 print(info.access.value)  # read
 print(info.unit)  # V
 print([model.value for model in info.models])
 print(info.source)  # vendor document used for this mapping
 
-measured = psu.measure.ch1.voltage
+measured = psu.measure.voltage(spd.Channel.CH1)  # recommended
+measured = psu.measure.voltage("CH1")  # raw SCPI argument is also accepted
 ```
 
 The helper returns a tuple because a header can have multiple mappings. It does
@@ -167,17 +171,25 @@ not report the last commanded CH3 value as if it were measured state.
 ```python
 psu.instrument.channel = spd.Channel.CH1
 psu.ch1.voltage = 3.3
-voltage = psu.measure.ch1.voltage
+voltage = psu.measure.voltage("CH1")
 
 status = psu.system.status
 error = psu.system.error  # pops one error-queue entry
 
-psu.timer(spd.Channel.CH1, True)
-psu.timer.set[spd.Channel.CH1, 1] = spd.TimerStep(voltage=3.0, current=0.5, time=2.0)
+timer_step = {"voltage_v": 3.0, "current_a": 0.5, "duration_s": 2.0}
+psu.timer.set("CH1", 1, **timer_step)
+timer_step = psu.timer.set("CH1", 1)  # fresh TIMER:SET? query
+psu.timer("CH1", True)
 
 psu.network.dhcp = False
 psu.network.ip_address = "192.168.1.50"
 ```
+
+Each channel has timer groups 1 through 5. A group is one timer step containing
+voltage, current, and duration; the maximum duration is 10,000 seconds. Passing
+only channel and group to `timer.set()` queries that step and returns an ordinary
+dictionary. Passing all three values writes it. Positional SCPI order is also
+supported: `psu.timer.set("CH1", 1, 3.0, 0.5, 2.0)`.
 
 Network properties accept and return ordinary dotted IPv4 strings. They are
 validated and normalized internally. Setting a static address does not

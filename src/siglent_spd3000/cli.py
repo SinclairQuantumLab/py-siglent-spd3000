@@ -182,8 +182,12 @@ def _run(args: argparse.Namespace) -> int:
             source_channel = psu.ch1 if args.channel is Channel.CH1 else psu.ch2
             setattr(source_channel, args.quantity, args.value)
         elif args.command == "measure":
-            measure_channel = psu.measure.ch1 if args.channel is Channel.CH1 else psu.measure.ch2
-            print(getattr(measure_channel, args.quantity))
+            if args.quantity == "voltage":
+                print(psu.measure.voltage(args.channel))
+            elif args.quantity == "current":
+                print(psu.measure.current(args.channel))
+            else:
+                print(psu.measure.power(args.channel))
         elif args.command == "output":
             psu.output(args.channel, args.state)
         elif args.command == "status":

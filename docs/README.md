@@ -46,6 +46,7 @@ convenience exception because it is used disproportionately often:
 
 ```python
 psu.output(Channel.CH1, True)
+psu.output("CH1", True)
 psu.output.ch1 = True
 print(psu.output.ch1)
 ```

@@ -22,12 +22,12 @@ def test_system_error_common_formats() -> None:
 def test_lookup_accepts_short_query_with_arguments() -> None:
     matches = lookup_command("meas:volt? ch1")
     assert len(matches) == 1
-    assert matches[0].python_path == "measure.ch1.voltage / measure.ch2.voltage"
+    assert matches[0].python_path == "measure.voltage(channel)"
     assert matches[0].access is Access.READ
 
 
 def test_command_registry_filters_model_capabilities() -> None:
     c_paths = {command.python_path for command in iter_commands(Model.SPD3303C)}
-    assert "measure.ch1.power / measure.ch2.power" not in c_paths
+    assert "measure.power(channel)" not in c_paths
     assert "network.ip_address" not in c_paths
     assert "output(channel, state); output.ch1/ch2/ch3" in c_paths
