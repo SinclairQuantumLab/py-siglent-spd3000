@@ -1,9 +1,7 @@
 # py-siglent-spd3000
 
 A synchronous Python driver and optional centralized gateway for Siglent SPD3303X, SPD3303X-E, and SPD3303C programmable DC power supplies.
-
-The semantic driver is the single source of instrument behavior.
-Direct and gateway-backed connections expose the same Python API; only the command executor changes.
+The gateway is recommended whenever more than one process or computer may use an instrument because it gives one process exclusive ownership of the physical connection, serializes every client, and enforces command timing globally; direct mode remains appropriate for simple one-process use, with the same Python API in either mode.
 
 ## Installation
 
@@ -236,18 +234,72 @@ The owner of the physical connection enforces timing globally, so gateway client
 
 ## Gateway
 
-The gateway relays command batches, not semantic operations.
-Client and server must report the exact same Git commit.
-Dirty working trees are allowed; commit matching is compatibility checking and is not authentication.
+Use one gateway per power supply when multiple programs need access, when control should continue from a central machine, or when no individual client should own the hardware connection.
+The gateway keeps that connection in one process, executes each client's command batch without interleaving, and applies the configured delay to the combined command stream.
+
+### Install
+
+Install the gateway extra on the computer physically connected to the supply:
+
+```bash
+python -m pip install "py-siglent-spd3000[gateway]"
+```
+
+Clients only need the base package unless they also connect to instruments directly:
+
+```bash
+python -m pip install py-siglent-spd3000
+```
+
+Use the same package build on the gateway and every client because a connection is rejected when their Git commit hashes differ.
+
+### Start the gateway
+
+Select the gateway computer's physical connection to the supply, such as its raw-socket address:
 
 ```bash
 spd3000 gateway serve --socket 192.168.1.50
+```
+
+Use `--vxi11 HOST` or `--visa RESOURCE` instead when that is how the gateway computer reaches the instrument.
+The server listens on `127.0.0.1:8765` by default and runs until stopped.
+
+### Connect a client
+
+CLI commands select the gateway instead of a physical transport:
+
+```bash
 spd3000 idn --gateway 127.0.0.1
 ```
 
-The default bind is `127.0.0.1:8765`.
-A non-loopback bind requires a pre-shared token from `--token-file` or `SIGLENT_SPD3000_GATEWAY_TOKEN`.
-The protocol does not provide encryption; use a VPN, SSH tunnel, or TLS proxy for untrusted networks.
+Python code uses the ordinary `SPD3000` API with a gateway connection:
+
+```python
+import siglent_spd3000 as spd
+
+with spd.SPD3000.connect(
+    connection=spd.ConnectionType.GATEWAY,
+    identifier="127.0.0.1",
+) as psu:
+    print(psu.idn)
+    psu.ch1.voltage = 5.0
+```
+
+### Remote clients
+
+To accept clients from another computer, bind the gateway to a reachable interface and supply the same pre-shared token file to the server and clients.
+A non-loopback bind is rejected without a token.
+
+```bash
+# Gateway computer
+spd3000 gateway serve --socket 192.168.1.50 --bind 0.0.0.0 --token-file gateway-token.txt
+
+# Client computer
+spd3000 idn --gateway 192.168.1.10 --token-file gateway-token.txt
+```
+
+Python clients pass the same secret with the `token` argument to `SPD3000.connect()`.
+The gateway protocol is not encrypted, so use it only on a trusted network or carry it through a VPN, SSH tunnel, or TLS proxy.
 
 ## Model differences
 
