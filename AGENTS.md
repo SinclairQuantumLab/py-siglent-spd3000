@@ -1,5 +1,11 @@
 # AGENTS.md
 
+## Markdown source formatting
+
+Write prose using semantic line breaks: one complete sentence per source line.
+Do not hard-wrap prose to a fixed column width.
+Keep code blocks, tables, and list structure in their natural Markdown form.
+
 ## Current project naming and precedence
 
 The current repository/project/distribution name is:

@@ -1,12 +1,11 @@
 # Official development references
 
-This directory is the offline, internal-repository reference set used to
-implement `py-siglent-spd3000`. The documents remain copyright SIGLENT and are
-stored unchanged for engineering traceability. Do not treat their presence in
-this repository as a grant to redistribute them publicly.
+This directory is the offline, internal-repository reference set used to implement `py-siglent-spd3000`.
+The documents remain copyright SIGLENT and are stored unchanged for engineering traceability.
+Do not treat their presence in this repository as a grant to redistribute them publicly.
 
-Hashes are SHA-256. `Retrieved / verified` records when the local file and its
-official source were checked, not necessarily the document publication date.
+Hashes are SHA-256.
+`Retrieved / verified` records when the local file and its official source were checked, not necessarily the document publication date.
 
 ## Instrument manuals and specifications
 
@@ -36,13 +35,12 @@ official source were checked, not necessarily the document publication date.
 - [SPD3303C product and resource page](https://www.siglent.com/int/products-overview/spd3303c/)
 - [DC power supply firmware and software](https://siglentna.com/service-and-support/firmware-software/dc-power-supplies/)
 
-Firmware binaries are intentionally excluded: they are not build inputs and
-are hardware-revision-sensitive.
+Firmware binaries are intentionally excluded: they are not build inputs and are hardware-revision-sensitive.
 
 ## API interpretation note: canonical and friendly names
 
-SCPI-derived root names own validation and instrument I/O. Modernized names are
-thin, developer-friendly aliases:
+SCPI-derived root names own validation and instrument I/O.
+Modernized names are thin, developer-friendly aliases:
 
 - IEEE common commands lose the leading `*`:
   - Stored setups:
@@ -50,8 +48,7 @@ thin, developer-friendly aliases:
     - `rcl(slot)` -> `recall(slot)`
   - Front-panel locking:
     - `lock()` and `unlock()` preserve the command names.
-    - `locked` is the necessary `*LOCK?` exception because one Python member
-      cannot be both a method and a boolean property.
+    - `locked` is the necessary `*LOCK?` exception because one Python member cannot be both a method and a boolean property.
 - Network settings have optional grouped aliases under `network`:
   - `ipaddr` -> `network.host`
   - `maskaddr` -> `network.subnet_mask`
@@ -62,8 +59,8 @@ The complete mapping and rationale are in the project README.
 
 ## API interpretation note: `OUTPut`
 
-The driver normally mirrors the canonical SCPI tree. `OUTPut` is the explicit
-convenience exception because it is used disproportionately often:
+The driver normally mirrors the canonical SCPI tree.
+`OUTPut` is the explicit convenience exception because it is used disproportionately often:
 
 ```python
 psu.output(Channel.CH1, OutputState.ON)
@@ -72,13 +69,11 @@ psu.ch1.output = True
 print(psu.ch1.output)
 ```
 
-All three writes above map to `OUTP CH1,ON`. The getter is not an `OUTP?` command;
-the manuals document no such query. CH1 and CH2 getters issue a fresh
-`SYST:STAT?` and decode bits 4 and 5. No CH3 status bit is documented, so CH3
-remains writable but reading `psu.ch3.output` raises
-`UnsupportedFeatureError`. The implementation never substitutes cached intent
-for hardware state.
+All three writes above map to `OUTP CH1,ON`.
+The getter is not an `OUTP?` command; the manuals document no such query.
+CH1 and CH2 getters issue a fresh `SYST:STAT?` and decode bits 4 and 5.
+No CH3 status bit is documented, so CH3 remains writable but reading `psu.ch3.output` raises `UnsupportedFeatureError`.
+The implementation never substitutes cached intent for hardware state.
 
-The C manual supplies the otherwise omitted `11 = series` interpretation for
-status bits 2 and 3. The `OUTP:TRACK` command arguments remain a separate
-encoding: `0 = independent`, `1 = series`, and `2 = parallel`.
+The C manual supplies the otherwise omitted `11 = series` interpretation for status bits 2 and 3.
+The `OUTP:TRACK` command arguments remain a separate encoding: `0 = independent`, `1 = series`, and `2 = parallel`.
