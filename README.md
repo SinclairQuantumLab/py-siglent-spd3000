@@ -1,24 +1,65 @@
 # py-siglent-spd3000
 
 A synchronous Python driver and optional centralized gateway for Siglent SPD3303X, SPD3303X-E, and SPD3303C programmable DC power supplies.
-The gateway is recommended whenever more than one process or computer may use an instrument because it gives one process exclusive ownership of the physical connection, serializes every client, and enforces command timing globally; direct mode remains appropriate for simple one-process use, with the same Python API in either mode.
+Connecting through the [gateway server](#gateway-server) is the recommended way to share a supply because one server owns the physical connection, runs client requests one at a time, and enforces the required command spacing; simple one-process scripts can still connect directly through the same Python API.
 
 ## Installation
 
+Python 3.10 or newer is required.
+Gateway connections also require the gateway computer and every client computer to run code built from the exact same Git commit.
+
+### Install from a Git checkout
+
+Install Python and Git on every computer, then run the following commands on the gateway computer and on each client computer.
+Replace `<REPOSITORY_URL>` with this repository's URL and `<COMMIT_HASH>` with the same agreed commit on every computer; do not type the angle brackets.
+
 ```bash
-python -m pip install py-siglent-spd3000
-python -m pip install "py-siglent-spd3000[driver]"
-python -m pip install "py-siglent-spd3000[gateway]"
+git clone <REPOSITORY_URL>
+cd py-siglent-spd3000
+git checkout <COMMIT_HASH>
+git rev-parse HEAD
+python -m venv .venv
 ```
 
-The base installation has no runtime dependencies outside the Python standard library and supports raw TCP for SPD3303X/X-E plus the gateway protocol.
-The `driver` extra adds every supported physical backend (PyVISA/PyVISA-py USBTMC and VXI-11).
-The `gateway` extra adds the same backends because a gateway server can own any supported physical connection.
-These are the project's only two extras.
-SPD3303C exposes USB Device/USBTMC only and therefore needs one of them.
+Activate the environment with `.venv\Scripts\Activate.ps1` in Windows PowerShell or `source .venv/bin/activate` on Linux and macOS.
+On the gateway computer, install the gateway extra:
 
-> **NOTE:** `uv` is entirely optional.
-> Contributors who prefer it can replace the development setup below with `uv sync --extra driver --extra gateway --dev` and prefix the check commands with `uv run`.
+```bash
+python -m pip install -e ".[gateway]"
+```
+
+On a computer that only connects to the gateway, install the base package:
+
+```bash
+python -m pip install -e .
+```
+
+Use `python -m pip install -e ".[driver]"` instead if that client computer must also connect directly through USBTMC/VISA or VXI-11.
+Compare the output of `git rev-parse HEAD` on every computer before starting the gateway; all hashes must be identical.
+Do not copy an editable source tree without its `.git` directory because the package would be unable to identify its commit and the gateway handshake would fail.
+Uncommitted local changes are allowed, but the person running them remains responsible for knowing that those changes are not represented by the commit hash.
+
+> **NOTE:** `uv` is optional and does not replace Git or the same-commit requirement.
+> After cloning and checking out the selected commit, run `uv sync --extra gateway --no-dev` on the gateway computer, `uv sync --no-dev` on a client-only computer, or `uv sync --extra driver --no-dev` on a computer that also connects directly.
+> Run project commands through that environment by prefixing them with `uv run`, for example `uv run spd3000 --help`.
+
+### Install a published build
+
+When installing from a package index, install the exact same published version on the gateway computer and every client computer.
+Replace `<VERSION>` with one specific release number:
+
+```bash
+# Gateway computer
+python -m pip install "py-siglent-spd3000[gateway]==<VERSION>"
+
+# Client-only computer
+python -m pip install "py-siglent-spd3000==<VERSION>"
+```
+
+A built wheel contains its source commit, so Git is not required at runtime when every computer installs the same build.
+The base package supports raw TCP and gateway clients, while the `driver` and `gateway` extras install PyVISA/PyVISA-py USBTMC and VXI-11 support.
+These are the project's only two extras.
+SPD3303C supports USBTMC only and therefore requires one of these extras on the computer physically connected to it.
 
 ## Basic use
 
@@ -232,73 +273,90 @@ Finite, non-negative intervals outside 10-100 ms are allowed but emit `SPD3000Ti
 Negative, NaN, and infinite values are rejected.
 The owner of the physical connection enforces timing globally, so gateway clients cannot interleave command batches.
 
-## Gateway
+## Gateway server
 
-Use one gateway per power supply when multiple programs need access, when control should continue from a central machine, or when no individual client should own the hardware connection.
-The gateway keeps that connection in one process, executes each client's command batch without interleaving, and applies the configured delay to the combined command stream.
+Run one gateway server for each power supply that will be shared.
+The gateway computer is the computer that can reach the physical instrument, while a client is any program or computer that sends driver operations through that gateway.
+Client code still uses the ordinary `SPD3000` API.
 
 ### Install
 
-Install the gateway extra on the computer physically connected to the supply:
+Follow [Installation](#installation) on every participating computer.
+The gateway computer needs the `gateway` extra, client-only computers need the base package, and every checkout or installed build must report the same commit hash.
+
+### Identify the addresses
+
+- `<INSTRUMENT_HOST>` is the power supply's IP address or hostname, for example `192.168.50.30`.
+- `<GATEWAY_HOST>` is the IP address or hostname of the computer running this gateway server, for example `192.168.50.20`.
+- `<TOKEN_FILE>` is a UTF-8 text file containing the same private secret on the gateway computer and each remote client, for example `gateway-token.txt`.
+- `localhost` means “this same computer” and is correct only when the gateway server and client run on one computer.
+
+Replace every `<...>` placeholder in the commands below with the value for your setup; do not type the angle brackets.
+Do not commit the token file to Git.
+The following command prints a suitable random secret; save that one line in the token file on the gateway computer and in a separate token file on each client computer:
 
 ```bash
-python -m pip install "py-siglent-spd3000[gateway]"
+python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
-
-Clients only need the base package unless they also connect to instruments directly:
-
-```bash
-python -m pip install py-siglent-spd3000
-```
-
-Use the same package build on the gateway and every client because a connection is rejected when their Git commit hashes differ.
 
 ### Start the gateway
 
-Select the gateway computer's physical connection to the supply, such as its raw-socket address:
+On the gateway computer, select how that computer reaches the instrument:
+
+- `--socket <INSTRUMENT_HOST>` uses raw TCP on an SPD3303X/X-E.
+- `--vxi11 <INSTRUMENT_HOST>` uses VXI-11 on an SPD3303X/X-E.
+- `--visa <VISA_RESOURCE>` uses a VISA resource and is the supported path for an SPD3303C.
+
+For a typical two-computer setup using raw TCP, start the server with:
 
 ```bash
-spd3000 gateway serve --socket 192.168.1.50
+spd3000 gateway serve --socket <INSTRUMENT_HOST> --bind <GATEWAY_HOST> --token-file <TOKEN_FILE>
 ```
 
-Use `--vxi11 HOST` or `--visa RESOURCE` instead when that is how the gateway computer reaches the instrument.
-The server listens on `127.0.0.1:8765` by default and runs until stopped.
+For example, if the supply is `192.168.50.30` and the gateway computer is `192.168.50.20`:
+
+```bash
+spd3000 gateway serve --socket 192.168.50.30 --bind 192.168.50.20 --token-file gateway-token.txt
+```
+
+The default gateway port is `8765`, and the command keeps running until it is stopped.
 
 ### Connect a client
 
-CLI commands select the gateway instead of a physical transport:
+On a different client computer, address the gateway computer rather than the power supply:
 
 ```bash
-spd3000 idn --gateway 127.0.0.1
+spd3000 idn --gateway <GATEWAY_HOST> --token-file <TOKEN_FILE>
 ```
 
-Python code uses the ordinary `SPD3000` API with a gateway connection:
+The equivalent Python connection is:
 
 ```python
+from pathlib import Path
+
 import siglent_spd3000 as spd
+
+GATEWAY_HOST = "192.168.50.20"  # IP address or hostname of the gateway computer
+GATEWAY_TOKEN = Path("gateway-token.txt").read_text(encoding="utf-8").strip()
 
 with spd.SPD3000.connect(
     connection=spd.ConnectionType.GATEWAY,
-    identifier="127.0.0.1",
+    identifier=GATEWAY_HOST,
+    token=GATEWAY_TOKEN,
 ) as psu:
     print(psu.idn)
     psu.ch1.voltage = 5.0
 ```
 
-### Remote clients
-
-To accept clients from another computer, bind the gateway to a reachable interface and supply the same pre-shared token file to the server and clients.
-A non-loopback bind is rejected without a token.
+When the client runs on the gateway computer itself, the shorter local-only setup is:
 
 ```bash
-# Gateway computer
-spd3000 gateway serve --socket 192.168.1.50 --bind 0.0.0.0 --token-file gateway-token.txt
-
-# Client computer
-spd3000 idn --gateway 192.168.1.10 --token-file gateway-token.txt
+spd3000 gateway serve --socket <INSTRUMENT_HOST>
+spd3000 idn --gateway localhost
 ```
 
-Python clients pass the same secret with the `token` argument to `SPD3000.connect()`.
+The local-only form listens only on the gateway computer and does not require a token.
+A server that accepts other computers is rejected unless a token is configured.
 The gateway protocol is not encrypted, so use it only on a trusted network or carry it through a VPN, SSH tunnel, or TLS proxy.
 
 ## Model differences

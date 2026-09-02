@@ -98,11 +98,15 @@ def test_hardware_checklist_is_linked_and_has_stable_unique_ids() -> None:
 
 def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> None:
     readme = (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
-    assert "The gateway is recommended whenever more than one process or computer" in readme
-    assert 'python -m pip install "py-siglent-spd3000[gateway]"' in readme
+    assert "[gateway server](#gateway-server) is the recommended way" in readme
+    assert "git clone <REPOSITORY_URL>" in readme
+    assert "git rev-parse HEAD" in readme
+    assert "> **NOTE:** `uv` is optional" in readme
+    assert "uv sync --extra gateway --no-dev" in readme
     assert "### Start the gateway" in readme
     assert "### Connect a client" in readme
-    assert "### Remote clients" in readme
+    assert "<GATEWAY_HOST>" in readme
+    assert "`localhost` means “this same computer”" in readme
     assert "spd3000 gateway serve --socket" in readme
     assert "connection=spd.ConnectionType.GATEWAY" in readme
     assert "The gateway protocol is not encrypted" in readme
