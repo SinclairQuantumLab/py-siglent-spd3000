@@ -9,10 +9,12 @@ Connecting through the [gateway server](#gateway-server) is the recommended way 
   - [Install from a Git checkout](#install-from-a-git-checkout)
   - [Install a published build](#install-a-published-build)
 - [Basic use](#basic-use)
+- [Connections](#connections)
+  - [VISA resource identifiers](#visa-resource-identifiers)
 - [From a manual SCPI command to Python](#from-a-manual-scpi-command-to-python)
   - [1. Guess the Python path from the SCPI command line](#1-guess-the-python-path-from-the-scpi-command-line)
   - [2. Confirm the mapping with the helper](#2-confirm-the-mapping-with-the-helper)
-- [Intentional `OUTPut` convenience exception](#intentional-output-convenience-exception)
+  - [Intentional `OUTPut` convenience exception](#intentional-output-convenience-exception)
 - [SCPI-shaped API](#scpi-shaped-api)
 - [Timing](#timing)
 - [Gateway server](#gateway-server)
@@ -127,6 +129,55 @@ with spd.SPD3000.connect(
 
 `connection` also accepts the strings `"socket"`, `"vxi11"`, `"visa"`, and `"gateway"`.
 
+## Connections
+
+`SPD3000.connect(connection, identifier, ...)` separates the connection method from the address or resource that identifies its destination.
+Enum members such as `spd.ConnectionType.SOCKET` are recommended, while their lowercase string values remain accepted for short scripts.
+
+| `connection` | Physical and protocol path | `identifier` | Supported models and installation |
+| --- | --- | --- | --- |
+| `spd.ConnectionType.SOCKET` or `"socket"` | Ethernet using raw SCPI over TCP 5025 | Power supply hostname or IP address, such as `"192.168.1.50"` | SPD3303X/X-E; base package |
+| `spd.ConnectionType.VXI11` or `"vxi11"` | Ethernet using VXI-11 directly through `python-vxi11` | Power supply hostname or IP address | SPD3303X/X-E; `driver` extra |
+| `spd.ConnectionType.VISA` or `"visa"` | USBTMC over USB, or a VISA-managed Ethernet connection such as VXI-11 | Complete VISA resource reported on that computer | All models over USB; SPD3303X/X-E over Ethernet when supported by the selected VISA backend; `driver` extra |
+| `spd.ConnectionType.GATEWAY` or `"gateway"` | This package's gateway protocol over TCP, with the gateway owning the physical connection | Gateway computer hostname or IP address, not the power supply address | All supported models through a suitably connected gateway; `gateway` extra |
+
+Ordinary raw socket connections always use the instrument's documented TCP port 5025, while gateway connections use port 8765 by default.
+See [Gateway server](#gateway-server) for gateway configuration, authentication, and firewall requirements.
+
+### VISA resource identifiers
+
+A VISA `identifier` should be copied from the resources enumerated by the VISA backend on the computer that will control the instrument.
+Do not construct it from the operating-system name or copy another computer's resource blindly, because the backend, interface number, and instrument serial number can change the exact value.
+After installing the `driver` extra and connecting the instrument, PyVISA-py resources can be listed with:
+
+```bash
+python -c "import pyvisa; print(*pyvisa.ResourceManager('@py').list_resources(), sep='\n')"
+```
+
+Typical resource shapes are:
+
+- USBTMC: `USB0::0x0483::0x7540::<SERIAL_NUMBER>::INSTR`
+- Ethernet through VISA/VXI-11: `TCPIP0::<INSTRUMENT_HOST>::inst0::INSTR`
+
+Replace the entire example with the resource returned on the target computer.
+Use `visa_backend="@py"` with PyVISA-py, or omit `visa_backend` to let PyVISA select an installed system backend such as NI-VISA:
+
+```python
+import siglent_spd3000 as spd
+
+VISA_RESOURCE = "USB0::0x0483::0x7540::<SERIAL_NUMBER>::INSTR"  # replace this value
+
+with spd.SPD3000.connect(
+    spd.ConnectionType.VISA,
+    VISA_RESOURCE,
+    visa_backend="@py",
+) as psu:
+    print(psu.idn)
+```
+
+The VISA resource grammar is generally portable, but driver installation and USB device permissions remain operating-system-specific.
+The [official SIGLENT PyVISA discovery example](docs/Programming%20Example_%20List%20connected%20VISA%20compatible%20resources%20using%20PyVISA.pdf) provides additional resource-discovery context.
+
 ## From a manual SCPI command to Python
 
 Start with the command entry in the applicable [official manual](docs/README.md).
@@ -211,7 +262,7 @@ An empty tuple means that no semantic mapping is registered.
 If a firmware-specific command is not registered, the explicit escape hatch is `psu.scpi.write("COMMAND ...")` or `psu.scpi.query("COMMAND?")`.
 Raw access still uses the configured executor, timing, and gateway serialization, but bypasses the semantic driver's model checks and response parsing.
 
-## Intentional `OUTPut` convenience exception
+### Intentional `OUTPut` convenience exception
 
 The regular API follows the instrument's canonical SCPI command and arguments.
 Because channel switching is one of the most frequent supply operations, each channel additionally exposes an intentional boolean convenience property.

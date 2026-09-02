@@ -125,6 +125,7 @@ def test_readme_has_table_of_contents_for_major_sections() -> None:
     for anchor in (
         "#installation",
         "#basic-use",
+        "#connections",
         "#from-a-manual-scpi-command-to-python",
         "#intentional-output-convenience-exception",
         "#scpi-shaped-api",
@@ -134,3 +135,17 @@ def test_readme_has_table_of_contents_for_major_sections() -> None:
         "#development",
     ):
         assert f"]({anchor})" in contents
+
+
+def test_connection_guide_covers_every_public_connection_type() -> None:
+    readme = (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
+    connections = readme.split("## Connections", 1)[1].split(
+        "## From a manual SCPI command to Python", 1
+    )[0]
+    for connection in ("SOCKET", "VXI11", "VISA", "GATEWAY"):
+        assert f"spd.ConnectionType.{connection}" in connections
+    assert "TCP 5025" in connections
+    assert "port 8765" in connections
+    assert "USB0::0x0483::0x7540::<SERIAL_NUMBER>::INSTR" in connections
+    assert "TCPIP0::<INSTRUMENT_HOST>::inst0::INSTR" in connections
+    assert "list_resources()" in connections
