@@ -28,6 +28,9 @@ extras. SPD3303C exposes USB Device/USBTMC only and therefore needs one of them.
 
 ## Basic use
 
+Already have a command from a SIGLENT manual? See
+[From a manual SCPI command to Python](#from-a-manual-scpi-command-to-python).
+
 ```python
 from siglent_spd3000 import SPD3000
 
@@ -62,6 +65,80 @@ with SPD3000.connect(
 
 `connection` also accepts the strings `"socket"`, `"vxi11"`, `"visa"`, and
 `"gateway"`.
+
+## From a manual SCPI command to Python
+
+Start with the command entry in the applicable [official manual](docs/README.md).
+Read its action, arguments, return format, supported channels, and model notes;
+the Python API preserves those device semantics and validates documented model
+limitations before I/O.
+
+### 1. Guess the Python path from the SCPI command line
+
+As a first approximation, expand abbreviated SCPI headers, make them lowercase,
+and replace `:` with `.`. A trailing `?` means a read, which is normally a
+property access; a value-taking command is normally a property assignment or a
+method call.
+
+| Manual command | Action and arguments | Python API |
+| --- | --- | --- |
+| `CH1:VOLTage 5` | Set the CH1 source voltage to 5 V | `psu.ch1.voltage = 5.0` |
+| `CH1:VOLTage?` | Read the CH1 voltage setpoint | `setpoint = psu.ch1.voltage` |
+| `MEASure:VOLTage? CH1` | Measure voltage; `CH1` selects the channel | `measured = psu.measure.ch1.voltage` |
+| `SYSTem:STATus?` | Read and decode the instrument status word | `status = psu.system.status` |
+| `OUTPut:TRACK 1` | Select series tracking mode | `psu.output.track(spd.TrackingMode.SERIES)` |
+| `TIMEr:SET CH1,1,3,0.5,2` | Set CH1 timer group 1 to 3 V, 0.5 A, 2 s | `psu.timer.set[spd.Channel.CH1, 1] = spd.TimerStep(3.0, 0.5, 2.0)` |
+
+Arguments determine the final Python shape. A channel argument commonly becomes
+a channel subtree, a single value commonly becomes an assignment, and an action
+with several arguments commonly becomes a method call or a typed value such as
+`TimerStep`.
+
+There are deliberate quirks:
+
+- IEEE common commands lose the leading `*` and use a descriptive root member:
+  `*IDN?` becomes `psu.identity`, `*SAV 1` becomes `psu.save(1)`, `*RCL 1`
+  becomes `psu.recall(1)`, and `*LOCK?` becomes `psu.locked`.
+- Manual abbreviations such as `MEAS:VOLT?` and `SYST:STAT?` use their expanded
+  words in Python: `measure.voltage` and `system.status`.
+- Network commands are grouped under `psu.network`, so `IPADDR` maps to
+  `psu.network.ip_address` even though the SCPI header has no `NETWork` prefix.
+- `OUTPut` has an intentional convenience API because it is used frequently;
+  see [Intentional `OUTPut` convenience exception](#intentional-output-convenience-exception).
+- A query is not necessarily a plain string in Python. For example, `*IDN?`,
+  `SYST:STAT?`, and `SYST:ERR?` return parsed typed objects.
+
+### 2. Confirm the mapping with the helper
+
+Pass either the manual's long form or the abbreviated command line to
+`lookup_command()`. Matching is case-insensitive, and command arguments and the
+trailing `?` are ignored:
+
+```python
+matches = spd.lookup_command("MEAS:VOLT? CH1")
+info = matches[0]
+
+print(info.canonical_scpi)  # MEASURE:VOLTAGE?
+print(info.python_path)  # measure.ch1.voltage / measure.ch2.voltage
+print(info.access.value)  # read
+print(info.unit)  # V
+print([model.value for model in info.models])
+print(info.source)  # vendor document used for this mapping
+
+measured = psu.measure.ch1.voltage
+```
+
+The helper returns a tuple because a header can have multiple mappings. It does
+not generate executable code or interpret the supplied arguments; use the
+manual's argument description to select the channel, enum, index, or value.
+An empty tuple means that no semantic mapping is registered.
+`spd.iter_commands(psu.model)` lists every registered command for the connected
+model.
+
+If a firmware-specific command is not registered, the explicit escape hatch is
+`psu.scpi.write("COMMAND ...")` or `psu.scpi.query("COMMAND?")`. Raw access still
+uses the configured executor, timing, and gateway serialization, but bypasses
+the semantic driver's model checks and response parsing.
 
 ## Intentional `OUTPut` convenience exception
 
