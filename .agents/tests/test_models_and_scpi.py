@@ -36,4 +36,4 @@ def test_command_registry_filters_model_capabilities() -> None:
     c_paths = {command.python_path for command in iter_commands(Model.SPD3303C)}
     assert "measure.power(channel)" not in c_paths
     assert "network.ip_address" not in c_paths
-    assert "output(channel, state); output.ch1/ch2/ch3" in c_paths
+    assert "output(channel, state); ch1/ch2/ch3.output" in c_paths

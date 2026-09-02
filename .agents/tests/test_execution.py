@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 import pytest
 
@@ -50,7 +51,7 @@ def test_default_interval_and_outside_range_warning_points_to_caller() -> None:
     with pytest.warns(SPD3000TimingWarning) as caught:
         settings = ExecutionSettings(0.0)
     assert settings.min_command_interval == 0.0
-    assert caught[0].filename == __file__
+    assert Path(caught[0].filename).resolve() == Path(__file__).resolve()
 
     with pytest.warns(SPD3000TimingWarning):
         ExecutionSettings(0.101)

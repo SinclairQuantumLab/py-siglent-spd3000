@@ -34,6 +34,13 @@ class Channel(str, Enum):
     CH3 = "CH3"
 
 
+class OutputState(str, Enum):
+    """Argument encoding accepted by ``OUTPut <channel>,<state>``."""
+
+    OFF = "OFF"
+    ON = "ON"
+
+
 class TrackingMode(IntEnum):
     """Argument encoding accepted by ``OUTPut:TRACK``."""
 

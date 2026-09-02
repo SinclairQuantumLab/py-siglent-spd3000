@@ -14,7 +14,7 @@ from .driver import SPD3000
 from .exceptions import GatewayError, SPD3000Error
 from .execution import DirectExecutor, ExecutionSettings, Transport
 from .gateway import GatewayServer
-from .models import Channel, ConnectionType
+from .models import Channel, ConnectionType, OutputState
 from .scpi import lookup_command
 from .transport import SocketTransport, VisaTransport, VXI11Transport
 
@@ -26,12 +26,12 @@ def _channel(value: str) -> Channel:
         raise argparse.ArgumentTypeError("channel must be CH1, CH2, or CH3") from exc
 
 
-def _state(value: str) -> bool:
+def _state(value: str) -> OutputState:
     normalized = value.lower()
     if normalized in {"on", "true", "1"}:
-        return True
+        return OutputState.ON
     if normalized in {"off", "false", "0"}:
-        return False
+        return OutputState.OFF
     raise argparse.ArgumentTypeError("state must be on or off")
 
 

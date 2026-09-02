@@ -9,6 +9,7 @@ from siglent_spd3000 import (
     ExecutionSettings,
     Model,
     OperatingMode,
+    OutputState,
     SPD3000ProtocolError,
     SPD3000TimingWarning,
     SPD3000ValidationError,
@@ -103,31 +104,38 @@ def test_backend_connection_helpers_are_not_public_constructors() -> None:
         assert not hasattr(SPD3000, name)
 
 
-def test_output_callable_and_properties_share_one_write_path() -> None:
+def test_output_command_and_channel_convenience_share_one_write_path() -> None:
     executor = FakeExecutor(responses_for("SPD3303X", **{"SYST:STAT?": ["0x0030", "0x0000"]}))
     psu = SPD3000(executor)
 
-    psu.output(Channel.CH1, True)
-    psu.output.ch1 = True
-    psu.output.ch2 = False
+    psu.output(Channel.CH1, OutputState.ON)
+    psu.output("CH1", "on")
+    psu.ch1.output = True
+    psu.ch2.output = False
 
-    assert executor.commands[1:4] == ["OUTP CH1,ON", "OUTP CH1,ON", "OUTP CH2,OFF"]
-    assert psu.output.ch1 is True
-    assert psu.output.ch2 is False
+    assert executor.commands[1:5] == [
+        "OUTP CH1,ON",
+        "OUTP CH1,ON",
+        "OUTP CH1,ON",
+        "OUTP CH2,OFF",
+    ]
+    assert psu.ch1.output is True
+    assert psu.ch2.output is False
     assert executor.commands[-2:] == ["SYST:STAT?", "SYST:STAT?"]
     assert "OUTP?" not in executor.commands
+    assert not hasattr(psu.output, "ch1")
 
 
 def test_ch3_output_is_write_only_and_never_cached() -> None:
     executor = FakeExecutor(responses_for("SPD3303C"))
     psu = SPD3000(executor)
 
-    psu.output.ch3 = True
+    psu.ch3.output = True
     assert executor.commands[-1] == "OUTP CH3,ON"
 
     before = list(executor.commands)
     with pytest.raises(UnsupportedFeatureError, match="no query"):
-        _ = psu.output.ch3
+        _ = psu.ch3.output
     assert executor.commands == before
 
 
@@ -273,7 +281,7 @@ def test_channel_strings_are_accepted_consistently() -> None:
     psu = SPD3000(executor)
 
     psu.instrument.channel = "ch2"
-    psu.output(" ch1 ", True)
+    psu.output(" ch1 ", "on")
     psu.output.wave("ch2", False)
     psu.timer("CH1", False)
 
@@ -298,6 +306,11 @@ def test_raw_enum_values_are_validated_before_io() -> None:
     for invalid_mode in (True, 3, "1"):
         with pytest.raises(SPD3000ValidationError, match="mode"):
             psu.output.track(invalid_mode)  # type: ignore[arg-type]
+        assert executor.commands == baseline
+
+    for invalid_state in (True, False, 1, "enabled"):
+        with pytest.raises(SPD3000ValidationError, match="state"):
+            psu.output(Channel.CH1, invalid_state)  # type: ignore[arg-type]
         assert executor.commands == baseline
 
     with pytest.raises(SPD3000ValidationError, match="supplied together"):

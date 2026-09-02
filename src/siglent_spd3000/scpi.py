@@ -79,7 +79,7 @@ COMMANDS: tuple[CommandInfo, ...] = (
     _command("CH2:CURRENT", "ch2.current", Access.READ_WRITE, unit="A", aliases=("CH2:CURR",)),
     _command("CH2:VOLTAGE", "ch2.voltage", Access.READ_WRITE, unit="V", aliases=("CH2:VOLT",)),
     _command(
-        "OUTPUT", "output(channel, state); output.ch1/ch2/ch3", Access.WRITE, aliases=("OUTP",)
+        "OUTPUT", "output(channel, state); ch1/ch2/ch3.output", Access.WRITE, aliases=("OUTP",)
     ),
     _command("OUTPUT:TRACK", "output.track(mode)", Access.WRITE, aliases=("OUTP:TRACK",)),
     _command(

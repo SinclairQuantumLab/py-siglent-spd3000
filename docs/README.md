@@ -45,16 +45,16 @@ The driver normally mirrors the canonical SCPI tree. `OUTPut` is the explicit
 convenience exception because it is used disproportionately often:
 
 ```python
-psu.output(Channel.CH1, True)
-psu.output("CH1", True)
-psu.output.ch1 = True
-print(psu.output.ch1)
+psu.output(Channel.CH1, OutputState.ON)
+psu.output("CH1", "ON")
+psu.ch1.output = True
+print(psu.ch1.output)
 ```
 
-Both writes above map to `OUTP CH1,ON`. The getter is not an `OUTP?` command;
+All three writes above map to `OUTP CH1,ON`. The getter is not an `OUTP?` command;
 the manuals document no such query. CH1 and CH2 getters issue a fresh
 `SYST:STAT?` and decode bits 4 and 5. No CH3 status bit is documented, so CH3
-remains writable but reading `psu.output.ch3` raises
+remains writable but reading `psu.ch3.output` raises
 `UnsupportedFeatureError`. The implementation never substitutes cached intent
 for hardware state.
 

@@ -29,6 +29,7 @@ from .models import (
     Channel,
     ConnectionType,
     Identification,
+    OutputState,
     SystemError,
     SystemStatus,
     TrackingMode,
@@ -64,6 +65,17 @@ def _require_bool(name: str, value: bool) -> bool:
     if type(value) is not bool:
         raise SPD3000ValidationError(f"{name} must be bool")
     return value
+
+
+def _require_output_state(value: OutputState | str) -> OutputState:
+    if isinstance(value, OutputState):
+        return value
+    if isinstance(value, str):
+        try:
+            return OutputState(value.strip().upper())
+        except ValueError:
+            pass
+    raise SPD3000ValidationError("state must be OutputState.ON, OutputState.OFF, 'ON', or 'OFF'")
 
 
 def _format_number(
@@ -138,11 +150,36 @@ class ProgrammableChannel:
         rendered = self._device._setpoint("current", value)
         self._device._write(f"{self._channel.value}:CURR {rendered}")
 
+    @property
+    def output(self) -> bool:
+        """Fresh output state derived indirectly from ``SYSTem:STATus?``."""
+
+        return self._device.output._read(self._channel)
+
+    @output.setter
+    def output(self, state: bool) -> None:
+        enabled = _require_bool("output", state)
+        self._device.output(self._channel, OutputState.ON if enabled else OutputState.OFF)
+
 
 class FixedChannel:
-    """Marker object for fixed-voltage CH3; output control lives under ``output``."""
+    """Fixed-voltage CH3 with write-only convenience output control."""
 
     channel = Channel.CH3
+
+    def __init__(self, device: SPD3000) -> None:
+        self._device = device
+
+    @property
+    def output(self) -> bool:
+        """Raise because Siglent documents no CH3 output-state query or status bit."""
+
+        return self._device.output._read(self.channel)
+
+    @output.setter
+    def output(self, state: bool) -> None:
+        enabled = _require_bool("output", state)
+        self._device.output(self.channel, OutputState.ON if enabled else OutputState.OFF)
 
 
 class Measure:
@@ -200,15 +237,15 @@ class Output:
     """SCPI ``OUTPut`` subtree with one documented convenience exception.
 
     Most of this package follows the vendor SCPI hierarchy literally. Output
-    switching is unusually frequent, so this subtree intentionally supports
-    both the canonical callable form and per-channel properties::
+    switching is unusually frequent, so channel objects additionally provide
+    boolean convenience properties::
 
-        psu.output(Channel.CH1, True)
-        psu.output("CH1", True)
-        psu.output.ch1 = True
-        print(psu.output.ch1)
+        psu.output(Channel.CH1, OutputState.ON)
+        psu.output("CH1", "ON")
+        psu.ch1.output = True
+        print(psu.ch1.output)
 
-    Both writes emit the same ``OUTP CH1,ON`` command. Reading CH1 or CH2 is a
+    All three writes emit the same ``OUTP CH1,ON`` command. Reading CH1 or CH2 is a
     fresh, indirect ``SYST:STAT?`` query because Siglent does not document
     ``OUTP?``. CH3 can be written, but its getter raises
     :class:`UnsupportedFeatureError` because no CH3 status bit is documented;
@@ -218,12 +255,12 @@ class Output:
     def __init__(self, device: SPD3000) -> None:
         self._device = device
 
-    def __call__(self, channel: Channel | str, state: bool) -> None:
+    def __call__(self, channel: Channel | str, state: OutputState | str) -> None:
         """Turn a channel output on or off using ``OUTPut <channel>,<state>``."""
 
         selected = _require_channel(channel)
-        enabled = _require_bool("state", state)
-        self._device._write(f"OUTP {selected.value},{'ON' if enabled else 'OFF'}")
+        selected_state = _require_output_state(state)
+        self._device._write(f"OUTP {selected.value},{selected_state.value}")
 
     def _read(self, channel: Channel) -> bool:
         if channel is Channel.CH3:
@@ -232,36 +269,6 @@ class Output:
             )
         status = self._device.system.status
         return status.ch1.output if channel is Channel.CH1 else status.ch2.output
-
-    @property
-    def ch1(self) -> bool:
-        """Fresh CH1 output state derived from ``SYSTem:STATus?``."""
-
-        return self._read(Channel.CH1)
-
-    @ch1.setter
-    def ch1(self, state: bool) -> None:
-        self(Channel.CH1, state)
-
-    @property
-    def ch2(self) -> bool:
-        """Fresh CH2 output state derived from ``SYSTem:STATus?``."""
-
-        return self._read(Channel.CH2)
-
-    @ch2.setter
-    def ch2(self, state: bool) -> None:
-        self(Channel.CH2, state)
-
-    @property
-    def ch3(self) -> bool:
-        """Raise because no official CH3 output-state query exists."""
-
-        return self._read(Channel.CH3)
-
-    @ch3.setter
-    def ch3(self, state: bool) -> None:
-        self(Channel.CH3, state)
 
     def track(self, mode: TrackingMode | int) -> None:
         """Set ``OUTPut:TRACK`` from the recommended enum or raw integer 0-2."""
@@ -498,7 +505,7 @@ class SPD3000:
         self.capabilities: Capabilities = CAPABILITIES[self.model]
         self.ch1 = ProgrammableChannel(self, Channel.CH1)
         self.ch2 = ProgrammableChannel(self, Channel.CH2)
-        self.ch3 = FixedChannel()
+        self.ch3 = FixedChannel(self)
         self.instrument = Instrument(self)
         self.measure = Measure(self)
         self.output = Output(self)

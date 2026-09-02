@@ -25,7 +25,7 @@ EXPECTED_HASHES = {
 
 
 def test_official_reference_hashes_and_index() -> None:
-    docs = Path(__file__).resolve().parents[1] / "docs"
+    docs = Path(__file__).resolve().parents[2] / "docs"
     if not any(docs.glob("*.pdf")):
         pytest.skip("vendor PDF archive is intentionally repository-only")
     index = (docs / "README.md").read_text(encoding="utf-8")
@@ -37,7 +37,7 @@ def test_official_reference_hashes_and_index() -> None:
 
 
 def test_output_exception_is_documented_for_users() -> None:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     readme = (root / "README.md").read_text(encoding="utf-8")
     docs = (root / "docs" / "README.md").read_text(encoding="utf-8")
     assert "Intentional `OUTPut` convenience exception" in readme
@@ -45,7 +45,7 @@ def test_output_exception_is_documented_for_users() -> None:
 
 
 def test_basic_use_shows_scpi_for_each_operation() -> None:
-    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+    readme = (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
     expected = (
         "SCPI: *IDN?",
         "SCPI: CH1:VOLTage 5.0",

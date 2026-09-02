@@ -47,13 +47,13 @@ with SPD3000.connect("socket", "192.168.1.50") as psu:
     print(psu.measure.voltage(spd.Channel.CH1))  # SCPI: MEASure:VOLTage? CH1
     print(psu.measure.current(spd.Channel.CH1))  # SCPI: MEASure:CURRent? CH1
 
-    psu.output.ch1 = True  # enable CH1 output; SCPI: OUTPut CH1,ON
-    print(psu.output.ch1)  # query CH1 state; SCPI: SYSTem:STATus?
+    psu.ch1.output = True  # enable CH1 output; SCPI: OUTPut CH1,ON
+    print(psu.ch1.output)  # query CH1 state; SCPI: SYSTem:STATus?
 ```
 
 Every property read performs a fresh hardware query; output state and
 measurements are never answered from a write cache. The SPD command set has no
-documented `OUTPut?` query, so `psu.output.ch1` reads and decodes
+documented `OUTPut?` query, so `psu.ch1.output` reads and decodes
 `SYSTem:STATus?`.
 
 For more involved programs, keep the main class directly available and access
@@ -70,7 +70,7 @@ with SPD3000.connect(
     timeout_s=5.0,
     min_command_interval_ms=50,
 ) as psu:
-    psu.output(spd.Channel.CH1, True)
+    psu.output(spd.Channel.CH1, spd.OutputState.ON)
     psu.output.track(spd.TrackingMode.INDEPENDENT)
 ```
 
@@ -105,8 +105,8 @@ property assignment or method call.
 Arguments determine the final Python shape but keep their SCPI order. Enum
 members are recommended for discoverability and type checking; their raw SCPI
 values are also accepted where documented. Thus channel arguments accept both
-`spd.Channel.CH1` and `"CH1"`, while tracking mode accepts both
-`spd.TrackingMode.SERIES` and `1`.
+`spd.Channel.CH1` and `"CH1"`, output state accepts both `spd.OutputState.ON`
+and `"ON"`, and tracking mode accepts both `spd.TrackingMode.SERIES` and `1`.
 
 There are deliberate quirks:
 
@@ -157,24 +157,26 @@ the semantic driver's model checks and response parsing.
 
 ## Intentional `OUTPut` convenience exception
 
-The public API otherwise follows the instrument's canonical SCPI tree as
-closely as practical. `OUTPut` is intentionally exceptional because channel
-switching is one of the most frequent supply operations. The callable and
-per-channel property forms are both supported and share exactly one write
-implementation:
+The regular API follows the instrument's canonical SCPI command and arguments.
+Because channel switching is one of the most frequent supply operations, each
+channel additionally exposes an intentional boolean convenience property. Both
+forms share exactly one write implementation:
 
 ```python
-psu.output(spd.Channel.CH1, True)  # OUTP CH1,ON
-psu.output.ch1 = True  # the same OUTP CH1,ON
+psu.output(spd.Channel.CH1, spd.OutputState.ON)  # regular; OUTP CH1,ON
+psu.ch1.output = True  # convenience; the same OUTP CH1,ON
 
-print(psu.output.ch1)  # fresh SYST:STAT?, bit 4
-assert psu.output.ch2 is False  # fresh SYST:STAT?, bit 5
+status = psu.system.status  # regular; fresh SYST:STAT?
+print(status.ch1.output)  # inspect CH1 output bit 4
+
+print(psu.ch1.output)  # convenience; fresh SYST:STAT?, then bit 4
+assert psu.ch2.output is False  # convenience; fresh SYST:STAT?, then bit 5
 ```
 
 Siglent does not document an `OUTPut?` query. CH1/CH2 state is therefore read
 indirectly from `SYSTem:STATus?`. The documented status word contains no CH3
-output bit, so writing `psu.output.ch3 = True` is supported but reading
-`psu.output.ch3` raises `UnsupportedFeatureError`. The driver deliberately does
+output bit, so writing `psu.ch3.output = True` is supported but reading
+`psu.ch3.output` raises `UnsupportedFeatureError`. The driver deliberately does
 not report the last commanded CH3 value as if it were measured state.
 
 ## SCPI-shaped API
@@ -262,6 +264,9 @@ is sent. Values outside documented limits or off the model's programming grid
 raise `SPD3000ValidationError`; the driver never silently rounds them.
 
 ## Development
+
+Repository-internal tests live under `.agents/tests/`; pytest discovers them
+through the project configuration.
 
 ```bash
 python -m venv .venv
