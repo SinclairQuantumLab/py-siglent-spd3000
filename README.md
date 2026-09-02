@@ -29,21 +29,31 @@ extras. SPD3303C exposes USB Device/USBTMC only and therefore needs one of them.
 ## Basic use
 
 ```python
-from siglent_spd3000 import Channel, SPD3000, TrackingMode
+from siglent_spd3000 import SPD3000
 
 with SPD3000.from_socket("192.168.1.50") as psu:
     psu.ch1.voltage = 5.0
     psu.ch1.current = 0.5
     print(psu.measure.ch1.voltage)
     print(psu.measure.ch1.current)
-
-    psu.output(Channel.CH1, True)
-    psu.output.track(TrackingMode.INDEPENDENT)
+    psu.output.ch1 = True
 ```
 
 Equivalent constructors are `from_vxi11()`, `from_visa()`, and
 `from_gateway()`. Every property read performs a fresh hardware query; output
 state and measurements are never answered from a write cache.
+
+For more involved programs, keep the main class directly available and access
+additional public types through the package namespace:
+
+```python
+import siglent_spd3000 as spd
+from siglent_spd3000 import SPD3000
+
+with SPD3000.from_socket("192.168.1.50") as psu:
+    psu.output(spd.Channel.CH1, True)
+    psu.output.track(spd.TrackingMode.INDEPENDENT)
+```
 
 ## Intentional `OUTPut` convenience exception
 
