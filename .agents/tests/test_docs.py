@@ -49,6 +49,9 @@ def test_output_exception_is_documented_for_users() -> None:
 
 def test_basic_use_shows_scpi_for_each_operation() -> None:
     readme = (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
+    assert "import siglent_spd3000 as spd" in readme
+    assert "from siglent_spd3000 import SPD3000" not in readme
+    assert "with spd.SPD3000.connect(" in readme
     expected = (
         'SCPI: "*IDN?"',
         'SCPI: "CH1:VOLTage 5.0"',

@@ -33,9 +33,8 @@ Already have a command from a SIGLENT manual? See
 
 ```python
 import siglent_spd3000 as spd
-from siglent_spd3000 import SPD3000
 
-with SPD3000.connect("socket", "192.168.1.50") as psu:
+with spd.SPD3000.connect("socket", "192.168.1.50") as psu:
     print(psu.idn)  # identify the instrument; SCPI: "*IDN?"
 
     psu.ch1.voltage = 5.0  # set CH1 voltage; SCPI: "CH1:VOLTage 5.0"
@@ -56,15 +55,14 @@ measurements are never answered from a write cache. The SPD command set has no
 documented `OUTPut?` query, so `psu.ch1.output` reads and decodes
 `SYSTem:STATus?`.
 
-For more involved programs, keep the main class directly available and access
-additional public types through the package namespace. The unified `connect()`
-factory accepts common execution settings directly:
+For more involved programs, the same package namespace provides connection
+types, enums, and execution settings. The unified `connect()` factory accepts
+common execution settings directly:
 
 ```python
 import siglent_spd3000 as spd
-from siglent_spd3000 import SPD3000
 
-with SPD3000.connect(
+with spd.SPD3000.connect(
     connection=spd.ConnectionType.SOCKET,
     identifier="192.168.1.50",
     timeout_s=5.0,
@@ -250,7 +248,7 @@ commands and between a query write and read. The driver defaults to 100 ms:
 settings = spd.ExecutionSettings(min_command_interval=0.100, timeout=5.0)
 ```
 
-Most callers can pass these values to `SPD3000.connect()` as shown in Basic
+Most callers can pass these values to `spd.SPD3000.connect()` as shown in Basic
 use. `ExecutionSettings` remains useful for custom executors and gateway
 internals; its interval is expressed in seconds.
 
