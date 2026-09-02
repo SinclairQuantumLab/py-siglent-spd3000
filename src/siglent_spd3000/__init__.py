@@ -38,7 +38,9 @@ from .models import (
     RegulationMode,
     SystemError,
     SystemStatus,
+    TimerState,
     TrackingMode,
+    WaveformState,
 )
 from .scpi import Access, CommandInfo, iter_commands, lookup_command
 
@@ -75,9 +77,11 @@ __all__ = [
     "SPD3000ValidationError",
     "SystemError",
     "SystemStatus",
+    "TimerState",
     "TrackingMode",
     "UnknownModelError",
     "UnsupportedFeatureError",
+    "WaveformState",
     "Write",
     "iter_commands",
     "lookup_command",

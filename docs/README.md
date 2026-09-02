@@ -56,6 +56,7 @@ Modernized names are thin, developer-friendly aliases:
   - `dhcp` -> `network.dhcp`
 
 The complete mapping and rationale are in the project README.
+Documented `ON`/`OFF` method arguments use command-specific enums such as `OutputState`, `TimerState`, and `WaveformState`, while binary properties such as `dhcp`, `locked`, and `ch1.output` expose ordinary Python `bool` values.
 
 ## API interpretation note: `OUTPut`
 

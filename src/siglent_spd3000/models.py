@@ -41,6 +41,20 @@ class OutputState(str, Enum):
     ON = "ON"
 
 
+class WaveformState(str, Enum):
+    """Argument encoding accepted by ``OUTPut:WAVE <channel>,<state>``."""
+
+    OFF = "OFF"
+    ON = "ON"
+
+
+class TimerState(str, Enum):
+    """Argument encoding accepted by ``TIMEr <channel>,<state>``."""
+
+    OFF = "OFF"
+    ON = "ON"
+
+
 class TrackingMode(IntEnum):
     """Argument encoding accepted by ``OUTPut:TRACK``."""
 

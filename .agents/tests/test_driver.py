@@ -13,8 +13,10 @@ from siglent_spd3000 import (
     SPD3000ProtocolError,
     SPD3000TimingWarning,
     SPD3000ValidationError,
+    TimerState,
     TrackingMode,
     UnsupportedFeatureError,
+    WaveformState,
 )
 
 from .conftest import FakeExecutor, responses_for
@@ -213,7 +215,7 @@ def test_network_uses_validated_strings() -> None:
                 "IPADDR?": ["192.168.1.50", "192.168.001.050"],
                 "MASKADDR?": ["255.255.255.0"],
                 "GATEADDR?": ["192.168.1.1"],
-                "DHCP?": ["OFF"],
+                "DHCP?": ["DHCP:OFF"],
             },
         )
     )
@@ -264,8 +266,8 @@ def test_c_unsupported_features_fail_before_io() -> None:
         lambda: psu.measure.power("CH1"),
         lambda: psu.ipaddr,
         lambda: psu.network.host,
-        lambda: psu.timer("CH1", True),
-        lambda: psu.output.wave("CH1", True),
+        lambda: psu.timer("CH1", TimerState.ON),
+        lambda: psu.output.wave("CH1", WaveformState.ON),
         lambda: psu.locked,
     ]
     for operation in operations:
@@ -281,14 +283,16 @@ def test_timer_mapping_and_output_commands() -> None:
     timer_step = {"voltage_v": 3.0, "current_a": 0.5, "duration_s": 2.0}
     psu.timer.set(Channel.CH1, 1, **timer_step)
     psu.timer.set("ch1", 2, 3.0, 0.5, 2.0)
-    psu.timer("ch1", True)
+    psu.timer("ch1", TimerState.ON)
+    psu.output.wave(Channel.CH2, WaveformState.ON)
     psu.output.track(TrackingMode.PARALLEL)
     psu.output.track(1)
 
-    assert executor.commands[-5:] == [
+    assert executor.commands[-6:] == [
         "TIMER:SET CH1,1,3,0.5,2",
         "TIMER:SET CH1,2,3,0.5,2",
         "TIMER CH1,ON",
+        "OUTP:WAVE CH2,ON",
         "OUTP:TRACK 2",
         "OUTP:TRACK 1",
     ]
@@ -305,8 +309,8 @@ def test_channel_strings_are_accepted_consistently() -> None:
 
     psu.instrument = "ch2"
     psu.output(" ch1 ", "on")
-    psu.output.wave("ch2", False)
-    psu.timer("CH1", False)
+    psu.output.wave("ch2", "off")
+    psu.timer("CH1", "off")
     selected = psu.instrument
 
     assert executor.commands[-5:] == [
@@ -337,6 +341,14 @@ def test_raw_enum_values_are_validated_before_io() -> None:
     for invalid_state in (True, False, 1, "enabled"):
         with pytest.raises(SPD3000ValidationError, match="state"):
             psu.output(Channel.CH1, invalid_state)  # type: ignore[arg-type]
+        assert executor.commands == baseline
+
+    for operation in (
+        lambda: psu.output.wave(Channel.CH1, False),  # type: ignore[arg-type]
+        lambda: psu.timer(Channel.CH1, True),  # type: ignore[arg-type]
+    ):
+        with pytest.raises(SPD3000ValidationError, match="state"):
+            operation()
         assert executor.commands == baseline
 
     with pytest.raises(SPD3000ValidationError, match="supplied together"):

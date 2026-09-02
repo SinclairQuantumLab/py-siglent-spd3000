@@ -97,7 +97,7 @@ A value-taking command is normally a property assignment or method call.
 
 Arguments determine the final Python shape but keep their SCPI order.
 Enum members are recommended for discoverability and type checking; their raw SCPI values are also accepted where documented.
-Thus channel arguments accept both `spd.Channel.CH1` and `"CH1"`, output state accepts both `spd.OutputState.ON` and `"ON"`, and tracking mode accepts both `spd.TrackingMode.SERIES` and `1`.
+Thus channel arguments accept both `spd.Channel.CH1` and `"CH1"`, output state accepts both `spd.OutputState.ON` and `"ON"`, timer state accepts both `spd.TimerState.ON` and `"ON"`, waveform state accepts both `spd.WaveformState.ON` and `"ON"`, and tracking mode accepts both `spd.TrackingMode.SERIES` and `1`.
 
 The mechanically derived name is always the canonical implementation.
 Friendly names are additive aliases which delegate to it; they do not contain separate validation or I/O logic:
@@ -122,6 +122,8 @@ Commands which already map cleanly need no alias; for example, `INSTrument CH1` 
 The remaining behavior and naming rules are:
 
 - Manual abbreviations such as `MEAS:VOLT?` and `SYST:STAT?` use their expanded words in Python: `measure.voltage(channel)` and `system.status`.
+- Method arguments preserve documented SCPI tokens through enums such as `OutputState`, `TimerState`, and `WaveformState`; Python `bool` is deliberately rejected in those positions.
+- Boolean properties such as `dhcp`, `locked`, and `ch1.output` instead expose ordinary `bool` values because the property itself represents a binary state.
 - `OUTPut` keeps canonical `output(channel, state)` and adds channel convenience properties because it is used frequently; see [Intentional `OUTPut` convenience exception](#intentional-output-convenience-exception).
 - A query is not necessarily a plain string in Python.
   For example, `*IDN?`, `SYST:STAT?`, and `SYST:ERR?` return parsed typed objects.
@@ -190,7 +192,8 @@ error = psu.system.error  # pops one error-queue entry
 timer_step = {"voltage_v": 3.0, "current_a": 0.5, "duration_s": 2.0}
 psu.timer.set("CH1", 1, **timer_step)
 timer_step = psu.timer.set("CH1", 1)  # fresh TIMER:SET? query
-psu.timer("CH1", True)
+psu.timer("CH1", spd.TimerState.ON)
+psu.output.wave("CH1", spd.WaveformState.ON)
 
 psu.dhcp = False
 psu.ipaddr = "192.168.1.50"

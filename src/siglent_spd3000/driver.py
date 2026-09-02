@@ -32,7 +32,9 @@ from .models import (
     OutputState,
     SystemError,
     SystemStatus,
+    TimerState,
     TrackingMode,
+    WaveformState,
     parse_identification,
     parse_status,
     parse_system_error,
@@ -76,6 +78,30 @@ def _require_output_state(value: OutputState | str) -> OutputState:
         except ValueError:
             pass
     raise SPD3000ValidationError("state must be OutputState.ON, OutputState.OFF, 'ON', or 'OFF'")
+
+
+def _require_waveform_state(value: WaveformState | str) -> WaveformState:
+    if isinstance(value, WaveformState):
+        return value
+    if isinstance(value, str):
+        try:
+            return WaveformState(value.strip().upper())
+        except ValueError:
+            pass
+    raise SPD3000ValidationError(
+        "state must be WaveformState.ON, WaveformState.OFF, 'ON', or 'OFF'"
+    )
+
+
+def _require_timer_state(value: TimerState | str) -> TimerState:
+    if isinstance(value, TimerState):
+        return value
+    if isinstance(value, str):
+        try:
+            return TimerState(value.strip().upper())
+        except ValueError:
+            pass
+    raise SPD3000ValidationError("state must be TimerState.ON, TimerState.OFF, 'ON', or 'OFF'")
 
 
 def _require_ipv4_address(value: str) -> str:
@@ -153,6 +179,13 @@ def _parse_bool(command: str, response: str) -> bool:
     if normalized in {"0", "OFF", "FALSE"}:
         return False
     raise SPD3000ProtocolError(f"Malformed {command} response: {response!r}")
+
+
+def _parse_dhcp(response: str) -> bool:
+    normalized = response.strip()
+    if normalized.upper().startswith("DHCP:"):
+        normalized = normalized.split(":", 1)[1]
+    return _parse_bool("DHCP?", normalized)
 
 
 class ProgrammableChannel:
@@ -295,13 +328,13 @@ class Output:
             ) from exc
         self._device._write(f"OUTP:TRACK {selected.value}")
 
-    def wave(self, channel: Channel | str, state: bool) -> None:
-        """Set X/X-E waveform display state for CH1 or CH2."""
+    def wave(self, channel: Channel | str, state: WaveformState | str) -> None:
+        """Set ``OUTPut:WAVE`` using its state enum or raw ``ON``/``OFF`` token."""
 
         self._device._require("waveform", "OUTPut:WAVE")
         selected = _require_channel(channel, programmable=True)
-        enabled = _require_bool("state", state)
-        self._device._write(f"OUTP:WAVE {selected.value},{'ON' if enabled else 'OFF'}")
+        selected_state = _require_waveform_state(state)
+        self._device._write(f"OUTP:WAVE {selected.value},{selected_state.value}")
 
 
 class Timer:
@@ -310,11 +343,13 @@ class Timer:
     def __init__(self, device: SPD3000) -> None:
         self._device = device
 
-    def __call__(self, channel: Channel | str, state: bool) -> None:
+    def __call__(self, channel: Channel | str, state: TimerState | str) -> None:
+        """Set ``TIMEr`` using its state enum or raw ``ON``/``OFF`` token."""
+
         self._device._require("timer", "TIMEr")
         selected = _require_channel(channel, programmable=True)
-        enabled = _require_bool("state", state)
-        self._device._write(f"TIMER {selected.value},{'ON' if enabled else 'OFF'}")
+        selected_state = _require_timer_state(state)
+        self._device._write(f"TIMER {selected.value},{selected_state.value}")
 
     @overload
     def set(self, channel: Channel | str, group: int) -> dict[str, float]: ...
@@ -713,10 +748,10 @@ class SPD3000:
 
     @property
     def dhcp(self) -> bool:
-        """Fresh canonical ``DHCP?`` query result."""
+        """Fresh boolean state parsed from the documented ``DHCP:<ON|OFF>`` response."""
 
         self._require("network", "DHCP?")
-        return _parse_bool("DHCP?", self._query("DHCP?"))
+        return _parse_dhcp(self._query("DHCP?"))
 
     @dhcp.setter
     def dhcp(self, value: bool) -> None:
