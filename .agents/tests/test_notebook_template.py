@@ -33,7 +33,7 @@ def test_connection_placeholder_is_confined_to_connection_settings_cell() -> Non
     placeholder_cells = [
         cell
         for cell in notebook["cells"]
-        if 'IDENTIFIER = "<IDENTIFIER>"' in "".join(cell["source"])
+        if 'identifier="<IDENTIFIER>"' in "".join(cell["source"])
     ]
 
     assert len(placeholder_cells) == 1
@@ -50,15 +50,18 @@ def test_connection_settings_are_clear_and_connection_specific() -> None:
 
     assert len(settings_cells) == 1
     settings = "".join(settings_cells[0]["source"])
-    assert "CONNECTION_TYPE = spd.ConnectionType.<TYPE>  # e.g., SOCKET, VISA" in settings
-    assert "connection=CONNECTION_TYPE" in settings
-    assert "CONNECTION =" not in settings
-    assert 'IDENTIFIER = "<IDENTIFIER>"' in settings
+    assert "connection=spd.ConnectionType.<TYPE>,  # e.g., SOCKET, VISA" in settings
+    assert 'identifier="<IDENTIFIER>"' in settings
+    assert "CONNECTION_TYPE =" not in settings
+    assert "IDENTIFIER =" not in settings
+    assert "TIMEOUT_S =" not in settings
+    assert "MIN_COMMAND_INTERVAL_MS =" not in settings
     assert "VISA_BACKEND" not in settings
     assert "GATEWAY_AUTH_FILE" not in settings
     assert '# visa_backend="@py"' in settings
     assert '# token=spd.load_gateway_auth("gateway-auth.toml")' in settings
     assert "raise ValueError" not in settings
+    assert 'print(f"Connected to {psu.model.value}")' in settings
 
 
 def test_notebook_template_is_linked_and_working_copy_is_ignored() -> None:
