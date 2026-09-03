@@ -38,6 +38,29 @@ class CommandInfo:
     python_aliases: tuple[str, ...] = ()
     aliases: tuple[str, ...] = ()
 
+    def __str__(self) -> str:
+        """Return command syntax, availability, and aliases as a readable summary."""
+
+        lines = [
+            "SIGLENT SPD3000 Series SCPI command",
+            f"- SCPI command: {self.canonical_scpi}",
+            f"- Python API: {self.python_path}",
+            f"- Access: {self.access.value}",
+            f"- Unit: {self.unit or 'none'}",
+            "- Models:",
+            *(f"  - {model.value}" for model in self.models),
+            f"- Documentation source: {self.source}",
+            "- Friendly Python aliases:",
+            *(_list_values(self.python_aliases)),
+            "- Accepted SCPI aliases:",
+            *(_list_values(self.aliases)),
+        ]
+        return "\n".join(lines)
+
+
+def _list_values(values: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(f"  - {value}" for value in values) or ("  - none",)
+
 
 def _command(
     canonical: str,

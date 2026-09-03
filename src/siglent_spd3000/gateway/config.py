@@ -29,6 +29,16 @@ class InstrumentSettings:
     visa_backend: str | None
     execution: ExecutionSettings
 
+    def __str__(self) -> str:
+        """Return the configured physical connection without opening it."""
+
+        return "\n".join(
+            (
+                "SIGLENT SPD3000 Series gateway instrument settings",
+                *_instrument_settings_lines(self),
+            )
+        )
+
     def open_executor(self) -> DirectExecutor:
         """Open the configured physical transport and wrap it in a direct executor."""
 
@@ -58,6 +68,44 @@ class GatewaySettings:
     bind: str
     port: int
     instrument: InstrumentSettings
+
+    def __str__(self) -> str:
+        """Return listener and physical instrument settings in a readable summary."""
+
+        return "\n".join(
+            (
+                "SIGLENT SPD3000 Series gateway settings",
+                f"- Source: {self.source}",
+                "- Listener:",
+                f"  - Bind address: {self.bind}",
+                f"  - Port: {self.port}",
+                "- Instrument:",
+                *_instrument_settings_lines(self.instrument, indent="  "),
+            )
+        )
+
+
+def _instrument_settings_lines(
+    settings: InstrumentSettings, *, indent: str = ""
+) -> tuple[str, ...]:
+    lines = [
+        f"{indent}- Connection:",
+        f"{indent}  - Type: {settings.connection.value}",
+        f"{indent}  - Identifier: {settings.identifier}",
+    ]
+    if settings.connection is ConnectionType.VISA:
+        lines.append(f"{indent}  - VISA backend: {settings.visa_backend or 'default'}")
+    lines.extend(
+        (
+            f"{indent}- Execution:",
+            (
+                f"{indent}  - Minimum command interval: "
+                f"{settings.execution.min_command_interval * 1000:.15g} ms"
+            ),
+            f"{indent}  - Timeout: {settings.execution.timeout:.15g} s",
+        )
+    )
+    return tuple(lines)
 
 
 def load_gateway_settings(path: str | Path = "gateway-settings.toml") -> GatewaySettings:

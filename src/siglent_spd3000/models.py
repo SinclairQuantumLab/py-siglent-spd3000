@@ -120,6 +120,29 @@ class Capabilities:
     vxi11: bool
     visa: bool = True
 
+    def __str__(self) -> str:
+        """Return model limits and supported features in a readable summary."""
+
+        return "\n".join(
+            (
+                "SIGLENT SPD3000 Series model capabilities",
+                f"- Model: {self.model.value}",
+                "- Programming resolution:",
+                f"  - Voltage: {self.voltage_resolution:g} V",
+                f"  - Current: {self.current_resolution:g} A",
+                "- Features:",
+                f"  - Power measurement: {_support(self.measure_power)}",
+                f"  - Waveform display: {_support(self.waveform)}",
+                f"  - Timer: {_support(self.timer)}",
+                f"  - Network configuration: {_support(self.network)}",
+                f"  - Front-panel lock query: {_support(self.lock_query)}",
+                "- Connections:",
+                f"  - Raw socket: {_support(self.socket)}",
+                f"  - VXI-11: {_support(self.vxi11)}",
+                f"  - VISA: {_support(self.visa)}",
+            )
+        )
+
 
 @dataclass(frozen=True)
 class ChannelStatus:
@@ -129,6 +152,16 @@ class ChannelStatus:
     output: bool
     timer: bool | None
     waveform: bool | None
+
+    def __str__(self) -> str:
+        """Return the decoded channel state without querying the instrument."""
+
+        return "\n".join(
+            (
+                "SIGLENT SPD3000 Series channel status",
+                *_channel_status_lines(self, prefix="- "),
+            )
+        )
 
 
 @dataclass(frozen=True)
@@ -144,6 +177,22 @@ class SystemStatus:
     ch1: ChannelStatus
     ch2: ChannelStatus
 
+    def __str__(self) -> str:
+        """Return the decoded system and channel states in a readable summary."""
+
+        return "\n".join(
+            (
+                "SIGLENT SPD3000 Series system status",
+                f"- Raw status word: 0x{self.raw:04X}",
+                f"- Operating mode: {self.operating_mode.value}",
+                "- Channels:",
+                "  - CH1:",
+                *_channel_status_lines(self.ch1, prefix="    - "),
+                "  - CH2:",
+                *_channel_status_lines(self.ch2, prefix="    - "),
+            )
+        )
+
 
 @dataclass(frozen=True)
 class SystemError:
@@ -151,6 +200,36 @@ class SystemError:
 
     code: int
     message: str
+
+    def __str__(self) -> str:
+        """Return the instrument error code and message in a readable summary."""
+
+        return "\n".join(
+            (
+                "SIGLENT SPD3000 Series system error",
+                f"- Code: {self.code}",
+                f"- Message: {self.message}",
+            )
+        )
+
+
+def _support(value: bool) -> str:
+    return "supported" if value else "not supported"
+
+
+def _state(value: bool | None) -> str:
+    if value is None:
+        return "unavailable"
+    return "on" if value else "off"
+
+
+def _channel_status_lines(status: ChannelStatus, *, prefix: str) -> tuple[str, ...]:
+    return (
+        f"{prefix}Regulation: {status.regulation.value}",
+        f"{prefix}Output: {_state(status.output)}",
+        f"{prefix}Timer: {_state(status.timer)}",
+        f"{prefix}Waveform: {_state(status.waveform)}",
+    )
 
 
 CAPABILITIES: dict[Model, Capabilities] = {

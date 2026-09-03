@@ -57,6 +57,16 @@ def test_default_interval_and_outside_range_warning_points_to_caller() -> None:
         ExecutionSettings(0.101)
 
 
+def test_execution_settings_have_a_human_readable_summary() -> None:
+    settings = ExecutionSettings(min_command_interval=0.025, timeout=7.5)
+
+    assert str(settings) == (
+        "SIGLENT SPD3000 Series command execution settings\n"
+        "- Minimum command interval: 25 ms\n"
+        "- Timeout: 7.5 s"
+    )
+
+
 @pytest.mark.parametrize("value", [-1.0, math.nan, math.inf, -math.inf])
 def test_invalid_interval_is_an_error(value: float) -> None:
     with pytest.raises(SPD3000ValidationError):

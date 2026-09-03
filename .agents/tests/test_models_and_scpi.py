@@ -2,7 +2,18 @@ from __future__ import annotations
 
 import pytest
 
-from siglent_spd3000 import Access, Model, SPD3000ProtocolError, iter_commands, lookup_command
+from siglent_spd3000 import (
+    Access,
+    Capabilities,
+    ChannelStatus,
+    Model,
+    OperatingMode,
+    RegulationMode,
+    SPD3000ProtocolError,
+    SystemStatus,
+    iter_commands,
+    lookup_command,
+)
 from siglent_spd3000.models import parse_identification, parse_system_error
 
 
@@ -23,8 +34,92 @@ def test_identification_alias_and_unknown_model() -> None:
 
 
 def test_system_error_common_formats() -> None:
-    assert parse_system_error("0 No Error").message == "No Error"
-    assert parse_system_error('-100,"Command error"').code == -100
+    no_error = parse_system_error("0 No Error")
+    command_error = parse_system_error('-100,"Command error"')
+
+    assert no_error.message == "No Error"
+    assert command_error.code == -100
+    assert str(command_error) == (
+        "SIGLENT SPD3000 Series system error\n"
+        "- Code: -100\n"
+        "- Message: Command error"
+    )
+
+
+def test_capabilities_have_a_grouped_human_readable_summary() -> None:
+    capabilities = Capabilities(
+        model=Model.SPD3303X_E,
+        voltage_resolution=0.01,
+        current_resolution=0.01,
+        measure_power=True,
+        waveform=True,
+        timer=True,
+        network=False,
+        lock_query=False,
+        socket=True,
+        vxi11=False,
+    )
+
+    assert str(capabilities) == (
+        "SIGLENT SPD3000 Series model capabilities\n"
+        "- Model: SPD3303X-E\n"
+        "- Programming resolution:\n"
+        "  - Voltage: 0.01 V\n"
+        "  - Current: 0.01 A\n"
+        "- Features:\n"
+        "  - Power measurement: supported\n"
+        "  - Waveform display: supported\n"
+        "  - Timer: supported\n"
+        "  - Network configuration: not supported\n"
+        "  - Front-panel lock query: not supported\n"
+        "- Connections:\n"
+        "  - Raw socket: supported\n"
+        "  - VXI-11: not supported\n"
+        "  - VISA: supported"
+    )
+
+
+def test_channel_status_formats_optional_fields_without_instrument_io() -> None:
+    status = ChannelStatus(
+        regulation=RegulationMode.CV,
+        output=True,
+        timer=False,
+        waveform=None,
+    )
+
+    assert str(status) == (
+        "SIGLENT SPD3000 Series channel status\n"
+        "- Regulation: CV\n"
+        "- Output: on\n"
+        "- Timer: off\n"
+        "- Waveform: unavailable"
+    )
+
+
+def test_system_status_groups_both_channel_statuses() -> None:
+    status = SystemStatus(
+        raw=0x235,
+        operating_mode=OperatingMode.SERIES,
+        ch1=ChannelStatus(RegulationMode.CC, True, False, None),
+        ch2=ChannelStatus(RegulationMode.CV, False, True, True),
+    )
+
+    assert str(status) == (
+        "SIGLENT SPD3000 Series system status\n"
+        "- Raw status word: 0x0235\n"
+        "- Operating mode: series\n"
+        "- Channels:\n"
+        "  - CH1:\n"
+        "    - Regulation: CC\n"
+        "    - Output: on\n"
+        "    - Timer: off\n"
+        "    - Waveform: unavailable\n"
+        "  - CH2:\n"
+        "    - Regulation: CV\n"
+        "    - Output: off\n"
+        "    - Timer: on\n"
+        "    - Waveform: on"
+    )
 
 
 def test_lookup_accepts_short_query_with_arguments() -> None:
@@ -59,3 +154,24 @@ def test_registry_separates_canonical_paths_from_friendly_aliases() -> None:
     output = lookup_command("OUTP")[0]
     assert output.python_path == "output(channel, state)"
     assert output.python_aliases == ("ch1.output", "ch2.output", "ch3.output")
+
+
+def test_command_info_has_a_grouped_human_readable_summary() -> None:
+    command = lookup_command("MEAS:VOLT? CH1")[0]
+
+    assert str(command) == (
+        "SIGLENT SPD3000 Series SCPI command\n"
+        "- SCPI command: MEASURE:VOLTAGE?\n"
+        "- Python API: measure.voltage(channel)\n"
+        "- Access: read\n"
+        "- Unit: V\n"
+        "- Models:\n"
+        "  - SPD3303X\n"
+        "  - SPD3303X-E\n"
+        "  - SPD3303C\n"
+        "- Documentation source: SPD3303X/SPD3303C Quick Start\n"
+        "- Friendly Python aliases:\n"
+        "  - none\n"
+        "- Accepted SCPI aliases:\n"
+        "  - MEAS:VOLT?"
+    )

@@ -108,6 +108,17 @@ class ExecutionSettings:
         object.__setattr__(self, "min_command_interval", interval)
         object.__setattr__(self, "timeout", timeout_value)
 
+    def __str__(self) -> str:
+        """Return command timing and timeout values in user-facing units."""
+
+        return "\n".join(
+            (
+                "SIGLENT SPD3000 Series command execution settings",
+                f"- Minimum command interval: {self.min_command_interval * 1000:.15g} ms",
+                f"- Timeout: {self.timeout:.15g} s",
+            )
+        )
+
 
 def _finite_number(name: str, value: float) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):

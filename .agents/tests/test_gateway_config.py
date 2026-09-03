@@ -37,6 +37,29 @@ min_command_interval_ms = 50
     assert settings.instrument.identifier == "192.168.50.30"
     assert settings.instrument.execution.timeout == 7.5
     assert settings.instrument.execution.min_command_interval == 0.05
+    assert str(settings.instrument) == (
+        "SIGLENT SPD3000 Series gateway instrument settings\n"
+        "- Connection:\n"
+        "  - Type: socket\n"
+        "  - Identifier: 192.168.50.30\n"
+        "- Execution:\n"
+        "  - Minimum command interval: 50 ms\n"
+        "  - Timeout: 7.5 s"
+    )
+    assert str(settings) == (
+        "SIGLENT SPD3000 Series gateway settings\n"
+        f"- Source: {source.resolve()}\n"
+        "- Listener:\n"
+        "  - Bind address: 192.168.50.20\n"
+        "  - Port: 18765\n"
+        "- Instrument:\n"
+        "  - Connection:\n"
+        "    - Type: socket\n"
+        "    - Identifier: 192.168.50.30\n"
+        "  - Execution:\n"
+        "    - Minimum command interval: 50 ms\n"
+        "    - Timeout: 7.5 s"
+    )
 
 
 def test_gateway_settings_apply_safe_defaults(tmp_path: Path) -> None:
