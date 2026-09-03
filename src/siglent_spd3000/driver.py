@@ -536,14 +536,14 @@ class SPD3000:
         *,
         timeout_s: float = 5.0,
         min_command_interval_ms: float = 100.0,
-        port: int | None = None,
         token: str | None = None,
         visa_backend: str | None = None,
     ) -> SPD3000:
         """Connect through a selected backend while configuring common execution settings.
 
-        ``identifier`` is a hostname or IP address for socket, VXI-11, and
-        gateway connections, and a VISA resource string for VISA connections.
+        ``identifier`` is a hostname or IP address for socket and VXI-11, a
+        ``host[:port]`` endpoint for gateway connections, and a VISA resource
+        string for VISA connections.
         Method-specific options are rejected when supplied to another method.
         """
 
@@ -574,51 +574,66 @@ class SPD3000:
 
         if selected is ConnectionType.SOCKET:
             cls._reject_connection_options(selected, token=token, visa_backend=visa_backend)
-            return cls._connect_socket(
-                target,
-                port=cls._connection_port(port, default=DEFAULT_SCPI_PORT),
-                settings=settings,
-            )
+            return cls._connect_socket(target, settings=settings)
         if selected is ConnectionType.VXI11:
-            cls._reject_connection_options(
-                selected,
-                port=port,
-                token=token,
-                visa_backend=visa_backend,
-            )
+            cls._reject_connection_options(selected, token=token, visa_backend=visa_backend)
             return cls._connect_vxi11(target, settings=settings)
         if selected is ConnectionType.VISA:
-            cls._reject_connection_options(selected, port=port, token=token)
+            cls._reject_connection_options(selected, token=token)
             return cls._connect_visa(target, backend=visa_backend, settings=settings)
 
         cls._reject_connection_options(selected, visa_backend=visa_backend)
+        host, gateway_port = cls._gateway_endpoint(target)
         return cls._connect_gateway(
-            target,
-            port=cls._connection_port(port, default=DEFAULT_GATEWAY_PORT),
+            host,
+            port=gateway_port,
             token=token,
             settings=settings,
         )
 
     @staticmethod
-    def _connection_port(port: int | None, *, default: int) -> int:
-        if port is None:
-            return default
-        if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
-            raise SPD3000ValidationError("port must be an integer from 1 through 65535")
-        return port
+    def _gateway_endpoint(identifier: str) -> tuple[str, int]:
+        host = identifier
+        raw_port: str | None = None
+        if identifier.startswith("["):
+            closing_bracket = identifier.find("]")
+            if closing_bracket < 0:
+                raise SPD3000ValidationError("gateway IPv6 identifier is missing closing ']'")
+            host = identifier[1:closing_bracket]
+            suffix = identifier[closing_bracket + 1 :]
+            if suffix:
+                if not suffix.startswith(":"):
+                    raise SPD3000ValidationError(
+                        "gateway identifier must be HOST, HOST:PORT, [IPv6], or [IPv6]:PORT"
+                    )
+                raw_port = suffix[1:]
+        elif identifier.count(":") == 1:
+            host, raw_port = identifier.split(":", 1)
+        elif ":" in identifier:
+            raise SPD3000ValidationError(
+                "gateway IPv6 identifiers must use '[IPv6]' or '[IPv6]:PORT'"
+            )
+        if not host or host != host.strip() or any(character.isspace() for character in host):
+            raise SPD3000ValidationError("gateway identifier must contain a valid host")
+        if raw_port is None:
+            return host, DEFAULT_GATEWAY_PORT
+        if not raw_port.isascii() or not raw_port.isdigit():
+            raise SPD3000ValidationError("gateway port must be an integer from 1 through 65535")
+        port = int(raw_port)
+        if not 1 <= port <= 65535:
+            raise SPD3000ValidationError("gateway port must be an integer from 1 through 65535")
+        return host, port
 
     @staticmethod
     def _reject_connection_options(
         connection: ConnectionType,
         *,
-        port: int | None = None,
         token: str | None = None,
         visa_backend: str | None = None,
     ) -> None:
         invalid = [
             name
             for name, value in (
-                ("port", port),
                 ("token", token),
                 ("visa_backend", visa_backend),
             )
@@ -635,13 +650,14 @@ class SPD3000:
         cls,
         host: str,
         *,
-        port: int = DEFAULT_SCPI_PORT,
         settings: ExecutionSettings,
     ) -> SPD3000:
         """Build a driver over an SPD3303X/X-E raw SCPI socket."""
 
         device = cls(
-            DirectExecutor(SocketTransport(host, port=port, timeout=settings.timeout), settings)
+            DirectExecutor(
+                SocketTransport(host, port=DEFAULT_SCPI_PORT, timeout=settings.timeout), settings
+            )
         )
         if not device.capabilities.socket:
             device.close()

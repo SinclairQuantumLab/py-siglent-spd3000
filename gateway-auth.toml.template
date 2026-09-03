@@ -1,5 +1,7 @@
-# Replace the empty value with a private random token for remote access.
+# Any non-empty custom string is a valid token.
+# A long, random, hard-to-guess token is strongly recommended for remote access.
+# One optional way to generate one is:
+# python -c "import secrets; print(secrets.token_urlsafe(32))"
 # Do not commit gateway-auth.toml to Git.
 
-[auth]
 token = ""

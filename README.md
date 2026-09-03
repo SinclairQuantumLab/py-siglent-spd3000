@@ -139,7 +139,7 @@ Enum members such as `spd.ConnectionType.SOCKET` are recommended, while their lo
 | `spd.ConnectionType.SOCKET` or `"socket"` | Ethernet using raw SCPI over TCP 5025 | Power supply hostname or IP address, such as `"192.168.1.50"` | SPD3303X/X-E; base package |
 | `spd.ConnectionType.VXI11` or `"vxi11"` | Ethernet using VXI-11 directly through `python-vxi11` | Power supply hostname or IP address | SPD3303X/X-E; `driver` extra |
 | `spd.ConnectionType.VISA` or `"visa"` | USBTMC over USB, or a VISA-managed Ethernet connection such as VXI-11 | Complete VISA resource reported on that computer | All models over USB; SPD3303X/X-E over Ethernet when supported by the selected VISA backend; `driver` extra |
-| `spd.ConnectionType.GATEWAY` or `"gateway"` | This package's gateway protocol over TCP, with the gateway owning the physical connection | `"localhost"` when the client and gateway run on the same computer; otherwise the gateway computer's hostname or IP address, such as `"192.168.50.20"`; never the power supply address | All supported models through a suitably connected gateway; `gateway` extra |
+| `spd.ConnectionType.GATEWAY` or `"gateway"` | This package's gateway protocol over TCP, with the gateway owning the physical connection | `"localhost"` when the client and gateway run on the same computer; otherwise the gateway computer's hostname or IP address, such as `"192.168.50.20"`; append a non-default port as in `"192.168.50.20:3333"`; never use the power supply address | All supported models through a suitably connected gateway; `gateway` extra |
 
 Ordinary raw socket connections always use the instrument's documented TCP port 5025, while gateway connections use port 8765 by default.
 See [Gateway server](#gateway-server) for gateway configuration, authentication, and firewall requirements.
@@ -382,7 +382,9 @@ min_command_interval_ms = 100.0
 Use `connection = "vxi11"` with the instrument hostname for VXI-11, or `connection = "visa"` with a VISA resource in `identifier` for USBTMC and SPD3303C.
 
 For access from another computer, also edit the generated `gateway-auth.toml`.
-Generate a private token with the following command and paste the resulting line between the quotation marks after `token =`:
+The token has no special format: any non-empty custom string is valid.
+Because anyone who knows this string can access the gateway, a long, random, hard-to-guess value is strongly recommended rather than a short manually chosen value.
+The following Python command is one convenient way to generate a recommended token, but it is only an example and is not required:
 
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(32))"
@@ -391,7 +393,6 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 The completed authentication file has this form:
 
 ```toml
-[auth]
 token = "replace-this-example-with-the-generated-private-token"
 ```
 
@@ -421,16 +422,22 @@ On a client computer containing its copy of `gateway-auth.toml`, test the connec
 spd3000 idn --gateway <GATEWAY_HOST> --gateway-auth gateway-auth.toml
 ```
 
+When the server uses a non-default gateway port, append it to the same identifier:
+
+```bash
+spd3000 idn --gateway 192.168.50.20:3333 --gateway-auth gateway-auth.toml
+```
+
 The equivalent Python connection is:
 
 ```python
 import siglent_spd3000 as spd
 
-GATEWAY_HOST = "192.168.50.20"  # IP address or hostname of the gateway computer
+GATEWAY_ENDPOINT = "192.168.50.20"  # append ":3333" when using a non-default port
 
 with spd.SPD3000.connect(
     connection=spd.ConnectionType.GATEWAY,
-    identifier=GATEWAY_HOST,
+    identifier=GATEWAY_ENDPOINT,
     token=spd.load_gateway_auth("gateway-auth.toml"),
 ) as psu:
     print(psu.idn)
@@ -445,7 +452,7 @@ For a local-only setup, set `gateway.bind = "localhost"` and either leave the ge
 The gateway listens on TCP port 8765 by default; it does not use the common web ports 80 or 443.
 Remote clients require an inbound firewall rule for TCP 8765 on the gateway computer, preferably restricted to the trusted client IP addresses.
 The gateway computer must also be allowed to reach an SPD3303X/X-E at TCP 5025 when `connection = "socket"` is used.
-If you change `gateway.port`, use the same value in the firewall rule and pass `--gateway-port <PORT>` on each client or `port=<PORT>` to `SPD3000.connect()`.
+If you change `gateway.port`, use the same value in the firewall rule and append it to the client identifier, for example `--gateway 192.168.50.20:3333` or `identifier="192.168.50.20:3333"`.
 A remotely accessible gateway uses token authentication, but the protocol is not encrypted, so use it only on a trusted network or carry it through a VPN, SSH tunnel, or TLS proxy.
 
 ## Model differences

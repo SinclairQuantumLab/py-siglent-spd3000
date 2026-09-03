@@ -167,7 +167,7 @@ def load_gateway_auth(
             return None
         raise GatewayConfigurationError(
             f"Gateway authentication file not found: {source}. "
-            "Copy gateway-auth.toml.template to gateway-auth.toml and set auth.token."
+            "Copy gateway-auth.toml.template to gateway-auth.toml and set token."
         ) from exc
     except OSError as exc:
         raise GatewayConfigurationError(
@@ -179,13 +179,11 @@ def load_gateway_auth(
         raise GatewayConfigurationError(f"Invalid TOML in {source}: {exc}") from exc
 
     if not isinstance(document, dict):
-        raise GatewayConfigurationError("Gateway authentication must contain a TOML table")
-    _reject_unknown_keys(document, {"auth"}, "authentication document root")
-    auth = _table(document, "auth", required=True)
-    _reject_unknown_keys(auth, {"token"}, "[auth]")
-    if not required and isinstance(auth.get("token"), str) and not auth["token"].strip():
+        raise GatewayConfigurationError("Gateway authentication must be a TOML document")
+    _reject_unknown_keys(document, {"token"}, "authentication document root")
+    if not required and isinstance(document.get("token"), str) and not document["token"].strip():
         return None
-    return _string(auth, "token")
+    return _string(document, "token")
 
 
 def create_gateway_config_files(directory: str | Path = ".") -> tuple[Path, Path]:

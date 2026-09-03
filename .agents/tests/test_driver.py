@@ -32,10 +32,9 @@ def test_connect_dispatches_and_converts_milliseconds(
         _cls: type[SPD3000],
         host: str,
         *,
-        port: int,
         settings: object,
     ) -> object:
-        captured.update(host=host, port=port, settings=settings)
+        captured.update(host=host, settings=settings)
         return sentinel
 
     monkeypatch.setattr(SPD3000, "_connect_socket", classmethod(fake_connect_socket))
@@ -46,12 +45,10 @@ def test_connect_dispatches_and_converts_milliseconds(
             identifier=" 192.168.1.50 ",
             timeout_s=7.0,
             min_command_interval_ms=5,
-            port=15025,
         )
 
     assert result is sentinel
     assert captured["host"] == "192.168.1.50"
-    assert captured["port"] == 15025
     settings = captured["settings"]
     assert isinstance(settings, ExecutionSettings)
     assert settings.timeout == 7.0
@@ -63,8 +60,11 @@ def test_connect_rejects_unknown_method_and_method_specific_options() -> None:
     with pytest.raises(SPD3000ValidationError, match="connection must be one of"):
         SPD3000.connect("ethernet", "192.168.1.50")
 
-    with pytest.raises(SPD3000ValidationError, match="port cannot be used"):
-        SPD3000.connect(ConnectionType.VXI11, "192.168.1.50", port=1234)
+    with pytest.raises(SPD3000ValidationError, match="token cannot be used"):
+        SPD3000.connect(ConnectionType.VXI11, "192.168.1.50", token="secret")
+
+    with pytest.raises(TypeError, match="unexpected keyword argument 'port'"):
+        SPD3000.connect(ConnectionType.SOCKET, "192.168.1.50", port=5025)  # type: ignore[call-arg]
 
 
 def test_connect_dispatches_every_supported_connection_type(
@@ -86,7 +86,7 @@ def test_connect_dispatches_every_supported_connection_type(
     assert SPD3000.connect(ConnectionType.SOCKET, "socket-host") is sentinel
     assert SPD3000.connect("vxi11", "vxi11-host") is sentinel
     assert SPD3000.connect(ConnectionType.VISA, "USB0::1::INSTR", visa_backend="@py") is sentinel
-    assert SPD3000.connect("gateway", "gateway-host", port=9876, token="secret") is sentinel
+    assert SPD3000.connect("gateway", "gateway-host:9876", token="secret") is sentinel
 
     assert [(name, target) for name, target, _kwargs in calls] == [
         ("_connect_socket", "socket-host"),
@@ -94,11 +94,43 @@ def test_connect_dispatches_every_supported_connection_type(
         ("_connect_visa", "USB0::1::INSTR"),
         ("_connect_gateway", "gateway-host"),
     ]
-    assert calls[0][2]["port"] == 5025
+    assert "port" not in calls[0][2]
     assert calls[2][2]["backend"] == "@py"
     assert calls[3][2]["port"] == 9876
     assert calls[3][2]["token"] == "secret"
     assert all(isinstance(kwargs["settings"], ExecutionSettings) for _, _, kwargs in calls)
+
+
+@pytest.mark.parametrize(
+    ("identifier", "expected"),
+    [
+        ("gateway.local", ("gateway.local", 8765)),
+        ("gateway.local:3333", ("gateway.local", 3333)),
+        ("[::1]", ("::1", 8765)),
+        ("[::1]:3333", ("::1", 3333)),
+    ],
+)
+def test_gateway_identifier_parses_optional_port(
+    identifier: str, expected: tuple[str, int]
+) -> None:
+    assert SPD3000._gateway_endpoint(identifier) == expected
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    (
+        ":3333",
+        "gateway.local:",
+        "gateway.local:0",
+        "gateway.local:65536",
+        "gateway host:3333",
+        "::1",
+        "[::1",
+    ),
+)
+def test_gateway_identifier_rejects_invalid_endpoints(identifier: str) -> None:
+    with pytest.raises(SPD3000ValidationError):
+        SPD3000._gateway_endpoint(identifier)
 
 
 def test_backend_connection_helpers_are_not_public_constructors() -> None:

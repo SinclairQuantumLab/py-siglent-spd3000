@@ -9,7 +9,6 @@ from collections.abc import Sequence
 from dataclasses import asdict
 from pathlib import Path
 
-from ._constants import DEFAULT_GATEWAY_PORT, DEFAULT_SCPI_PORT
 from .driver import SPD3000
 from .exceptions import GatewayError, SPD3000Error
 from .gateway import GatewayServer
@@ -44,9 +43,7 @@ def _add_connection(parser: argparse.ArgumentParser, *, gateway_allowed: bool = 
     group.add_argument("--vxi11", metavar="HOST")
     group.add_argument("--visa", metavar="RESOURCE")
     if gateway_allowed:
-        group.add_argument("--gateway", metavar="HOST")
-    parser.add_argument("--socket-port", type=int, default=DEFAULT_SCPI_PORT)
-    parser.add_argument("--gateway-port", type=int, default=DEFAULT_GATEWAY_PORT)
+        group.add_argument("--gateway", metavar="HOST[:PORT]")
     parser.add_argument("--visa-backend")
     parser.add_argument("--interval", type=float, default=0.100, metavar="SECONDS")
     parser.add_argument("--timeout", type=float, default=5.0, metavar="SECONDS")
@@ -63,7 +60,6 @@ def _open_device(args: argparse.Namespace) -> SPD3000:
         return SPD3000.connect(
             ConnectionType.SOCKET,
             args.socket,
-            port=args.socket_port,
             timeout_s=args.timeout,
             min_command_interval_ms=args.interval * 1000.0,
         )
@@ -85,7 +81,6 @@ def _open_device(args: argparse.Namespace) -> SPD3000:
     return SPD3000.connect(
         ConnectionType.GATEWAY,
         args.gateway,
-        port=args.gateway_port,
         token=load_gateway_auth(
             args.gateway_auth or Path("gateway-auth.toml"),
             required=args.gateway_auth is not None,

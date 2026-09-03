@@ -113,6 +113,9 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "`localhost` means the gateway accepts clients only from that same computer" in readme
     assert "spd3000 gateway serve" in readme
     assert "--gateway-auth gateway-auth.toml" in readme
+    assert 'token = "replace-this-example-with-the-generated-private-token"' in readme
+    assert "any non-empty custom string is valid" in readme
+    assert "only an example and is not required" in readme
     assert "TCP port 8765" in readme
     assert "TCP 5025" in readme
     assert "connection=spd.ConnectionType.GATEWAY" in readme
@@ -150,3 +153,4 @@ def test_connection_guide_covers_every_public_connection_type() -> None:
     assert "TCPIP0::<INSTRUMENT_HOST>::inst0::INSTR" in connections
     assert "list_resources()" in connections
     assert '`"localhost"` when the client and gateway run on the same computer' in connections
+    assert '`"192.168.50.20:3333"`' in connections

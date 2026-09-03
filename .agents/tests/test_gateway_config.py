@@ -61,6 +61,10 @@ def test_distributed_gateway_templates_match_repository_copies() -> None:
     packaged = root / "src" / "siglent_spd3000" / "gateway" / "templates"
     for name in config.GATEWAY_TEMPLATE_NAMES:
         assert (packaged / name).read_bytes() == (root / name).read_bytes()
+    auth_template = (root / "gateway-auth.toml.template").read_text(encoding="utf-8")
+    assert "[auth]" not in auth_template
+    assert "Any non-empty custom string is a valid token" in auth_template
+    assert "secrets.token_urlsafe(32)" in auth_template
 
 
 def test_socket_executor_always_uses_fixed_siglent_port(
@@ -140,9 +144,12 @@ def test_gateway_serve_uses_external_settings_file_by_default() -> None:
 
 def test_gateway_client_uses_authentication_toml_option() -> None:
     args = build_parser().parse_args(
-        ["idn", "--gateway", "gateway.local", "--gateway-auth", "client-auth.toml"]
+        ["idn", "--gateway", "gateway.local:3333", "--gateway-auth", "client-auth.toml"]
     )
+    assert args.gateway == "gateway.local:3333"
     assert args.gateway_auth == Path("client-auth.toml")
+    assert not hasattr(args, "gateway_port")
+    assert not hasattr(args, "socket_port")
 
 
 def test_gateway_init_creates_both_files_without_overwriting(
@@ -161,7 +168,7 @@ def test_gateway_init_creates_both_files_without_overwriting(
 
 def test_gateway_auth_loads_token(tmp_path: Path) -> None:
     source = tmp_path / "gateway-auth.toml"
-    source.write_text('[auth]\ntoken = "correct-horse-battery-staple"\n', encoding="utf-8")
+    source.write_text('token = "correct-horse-battery-staple"\n', encoding="utf-8")
 
     assert config.load_gateway_auth(source) == "correct-horse-battery-staple"
 
@@ -172,7 +179,7 @@ def test_missing_optional_gateway_auth_means_no_authentication(tmp_path: Path) -
 
 def test_empty_optional_gateway_auth_means_local_only(tmp_path: Path) -> None:
     source = tmp_path / "gateway-auth.toml"
-    source.write_text('[auth]\ntoken = ""\n', encoding="utf-8")
+    source.write_text('token = ""\n', encoding="utf-8")
 
     assert config.load_gateway_auth(source, required=False) is None
 
@@ -180,9 +187,9 @@ def test_empty_optional_gateway_auth_means_local_only(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "contents",
     [
-        '[auth]\ntoken = ""\n',
-        '[auth]\ntoken = "secret"\nextra = true\n',
-        '[authentication]\ntoken = "secret"\n',
+        'token = ""\n',
+        'token = "secret"\nextra = true\n',
+        '[auth]\ntoken = "secret"\n',
     ],
 )
 def test_gateway_auth_rejects_invalid_files(tmp_path: Path, contents: str) -> None:
