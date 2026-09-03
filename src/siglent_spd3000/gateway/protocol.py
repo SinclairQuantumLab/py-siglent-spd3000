@@ -75,12 +75,17 @@ def serialize_exception(exc: BaseException, remote_traceback: str) -> dict[str, 
     """Serialize only known southbound exceptions and safe gateway errors."""
 
     if isinstance(exc, SPD3000Error):
-        return {
+        payload: dict[str, Any] = {
             "kind": "southbound",
             "exception_type": type(exc).__name__,
             "args": [_json_safe(arg) for arg in exc.args],
             "remote_traceback": remote_traceback,
         }
+        for name in ("batch_command_index", "batch_command_kind", "batch_command"):
+            value = getattr(exc, name, None)
+            if isinstance(value, (int, str)) and not isinstance(value, bool):
+                payload[name] = value
+        return payload
     gateway_type = type(exc).__name__ if isinstance(exc, GatewayError) else "GatewayInternalError"
     return {
         "kind": "gateway",
@@ -108,6 +113,15 @@ def reconstruct_exception(data: Any) -> BaseException:
             exc: BaseException = GatewayProtocolError("Unknown southbound exception type")
         else:
             exc = southbound_cls(*args)
+            batch_command_index = data.get("batch_command_index")
+            batch_command_kind = data.get("batch_command_kind")
+            batch_command = data.get("batch_command")
+            if isinstance(batch_command_index, int) and not isinstance(batch_command_index, bool):
+                exc.__dict__["batch_command_index"] = batch_command_index
+            if batch_command_kind in {"write", "query"}:
+                exc.__dict__["batch_command_kind"] = batch_command_kind
+            if isinstance(batch_command, str):
+                exc.__dict__["batch_command"] = batch_command
     else:
         gateway_classes: dict[str, type[GatewayError]] = {
             "GatewayAuthenticationError": GatewayAuthenticationError,

@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+import threading
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from ipaddress import AddressValueError, IPv4Address, IPv4Network, NetmaskValueError
+from types import TracebackType
 from typing import overload
 
 from ._constants import DEFAULT_GATEWAY_PORT, DEFAULT_SCPI_PORT
 from .exceptions import (
+    SPD3000Error,
     SPD3000ProtocolError,
     SPD3000ValidationError,
+    SPD3000VerificationError,
     UnsupportedFeatureError,
 )
 from .execution import (
@@ -190,6 +195,69 @@ def _parse_dhcp(response: str) -> bool:
     return _parse_bool("DHCP?", normalized)
 
 
+def _parse_timer_step(response: str) -> dict[str, float]:
+    parts = [part.strip() for part in response.split(",")]
+    if len(parts) != 3:
+        raise SPD3000ProtocolError(f"Malformed TIMER:SET? response: {response!r}")
+    return {
+        "voltage_v": _parse_float("TIMER:SET? voltage", parts[0]),
+        "current_a": _parse_float("TIMER:SET? current", parts[1]),
+        "duration_s": _parse_float("TIMER:SET? time", parts[2]),
+    }
+
+
+@dataclass(frozen=True)
+class _Verification:
+    query: str | None
+    expected: object
+    parser: Callable[[str], object] | None
+    unavailable_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class _PendingWrite:
+    command: str
+    verification: _Verification | None
+
+
+class _BatchContext:
+    """Reusable ``with psu.batch:`` context manager."""
+
+    def __init__(self, device: SPD3000) -> None:
+        self._device = device
+
+    def __enter__(self) -> SPD3000:
+        self._device._begin_batch()
+        return self._device
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        _exc: BaseException | None,
+        _traceback: TracebackType | None,
+    ) -> None:
+        self._device._end_batch(execute=exc_type is None)
+
+
+class _VerifyContext:
+    """Reusable ``with psu.verify:`` context manager."""
+
+    def __init__(self, device: SPD3000) -> None:
+        self._device = device
+
+    def __enter__(self) -> SPD3000:
+        self._device._begin_verify()
+        return self._device
+
+    def __exit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc: BaseException | None,
+        _traceback: TracebackType | None,
+    ) -> None:
+        self._device._end_verify()
+
+
 class ProgrammableChannel:
     """SCPI ``CH1`` or ``CH2`` source subtree."""
 
@@ -206,7 +274,15 @@ class ProgrammableChannel:
     @voltage.setter
     def voltage(self, value: float) -> None:
         rendered = self._device._setpoint("voltage", value)
-        self._device._write(f"{self._channel.value}:VOLT {rendered}")
+        query = f"{self._channel.value}:VOLT?"
+        self._device._write(
+            f"{self._channel.value}:VOLT {rendered}",
+            verification=_Verification(
+                query,
+                float(rendered),
+                lambda response: _parse_float(query, response),
+            ),
+        )
 
     @property
     def current(self) -> float:
@@ -217,7 +293,15 @@ class ProgrammableChannel:
     @current.setter
     def current(self, value: float) -> None:
         rendered = self._device._setpoint("current", value)
-        self._device._write(f"{self._channel.value}:CURR {rendered}")
+        query = f"{self._channel.value}:CURR?"
+        self._device._write(
+            f"{self._channel.value}:CURR {rendered}",
+            verification=_Verification(
+                query,
+                float(rendered),
+                lambda response: _parse_float(query, response),
+            ),
+        )
 
     @property
     def output(self) -> bool:
@@ -307,7 +391,24 @@ class Output:
 
         selected = _require_channel(channel)
         selected_state = _require_output_state(state)
-        self._device._write(f"OUTP {selected.value},{selected_state.value}")
+        command = f"OUTP {selected.value},{selected_state.value}"
+        expected = selected_state is OutputState.ON
+        if selected is Channel.CH3:
+            verification = _Verification(
+                query=None,
+                expected=expected,
+                parser=None,
+                unavailable_reason=(
+                    "Siglent documents no query or SYST:STAT? bit for CH3 output state"
+                ),
+            )
+        else:
+            verification = _Verification(
+                query="SYST:STAT?",
+                expected=expected,
+                parser=lambda response: self._status_output(response, selected),
+            )
+        self._device._write(command, verification=verification)
 
     def _read(self, channel: Channel) -> bool:
         if channel is Channel.CH3:
@@ -315,6 +416,10 @@ class Output:
                 "Siglent documents no query or SYST:STAT? bit for CH3 output state"
             )
         status = self._device.system.status
+        return status.ch1.output if channel is Channel.CH1 else status.ch2.output
+
+    def _status_output(self, response: str, channel: Channel) -> bool:
+        status = parse_status(response, self._device.model)
         return status.ch1.output if channel is Channel.CH1 else status.ch2.output
 
     def track(self, mode: TrackingMode | int) -> None:
@@ -328,7 +433,19 @@ class Output:
             raise SPD3000ValidationError(
                 "mode must be a TrackingMode or integer 0, 1, or 2"
             ) from exc
-        self._device._write(f"OUTP:TRACK {selected.value}")
+        expected = {
+            TrackingMode.INDEPENDENT: "independent",
+            TrackingMode.SERIES: "series",
+            TrackingMode.PARALLEL: "parallel",
+        }[selected]
+        self._device._write(
+            f"OUTP:TRACK {selected.value}",
+            verification=_Verification(
+                "SYST:STAT?",
+                expected,
+                lambda response: parse_status(response, self._device.model).operating_mode.value,
+            ),
+        )
 
     def wave(self, channel: Channel | str, state: WaveformState | str) -> None:
         """Set ``OUTPut:WAVE`` using its state enum or raw ``ON``/``OFF`` token."""
@@ -336,7 +453,19 @@ class Output:
         self._device._require("waveform", "OUTPut:WAVE")
         selected = _require_channel(channel, programmable=True)
         selected_state = _require_waveform_state(state)
-        self._device._write(f"OUTP:WAVE {selected.value},{selected_state.value}")
+        expected = selected_state is WaveformState.ON
+        self._device._write(
+            f"OUTP:WAVE {selected.value},{selected_state.value}",
+            verification=_Verification(
+                "SYST:STAT?",
+                expected,
+                lambda response: self._status_waveform(response, selected),
+            ),
+        )
+
+    def _status_waveform(self, response: str, channel: Channel) -> bool | None:
+        status = parse_status(response, self._device.model)
+        return status.ch1.waveform if channel is Channel.CH1 else status.ch2.waveform
 
 
 class Timer:
@@ -351,7 +480,15 @@ class Timer:
         self._device._require("timer", "TIMEr")
         selected = _require_channel(channel, programmable=True)
         selected_state = _require_timer_state(state)
-        self._device._write(f"TIMER {selected.value},{selected_state.value}")
+        expected = selected_state is TimerState.ON
+        self._device._write(
+            f"TIMER {selected.value},{selected_state.value}",
+            verification=_Verification(
+                "SYST:STAT?",
+                expected,
+                lambda response: self._status_timer(response, selected),
+            ),
+        )
 
     @overload
     def set(self, channel: Channel | str, group: int) -> dict[str, float]: ...
@@ -388,14 +525,7 @@ class Timer:
         values = (voltage_v, current_a, duration_s)
         if all(value is None for value in values):
             response = self._device._query(f"TIMER:SET? {selected.value},{selected_group}")
-            parts = [part.strip() for part in response.split(",")]
-            if len(parts) != 3:
-                raise SPD3000ProtocolError(f"Malformed TIMER:SET? response: {response!r}")
-            return {
-                "voltage_v": _parse_float("TIMER:SET? voltage", parts[0]),
-                "current_a": _parse_float("TIMER:SET? current", parts[1]),
-                "duration_s": _parse_float("TIMER:SET? time", parts[2]),
-            }
+            return _parse_timer_step(response)
         if any(value is None for value in values):
             raise SPD3000ValidationError(
                 "voltage_v, current_a, and duration_s must be supplied together"
@@ -407,10 +537,24 @@ class Timer:
         duration = _format_number(
             "duration_s", duration_s, minimum=Decimal("0"), maximum=Decimal("10000")
         )
+        command = f"TIMER:SET {selected.value},{selected_group},{voltage},{current},{duration}"
         self._device._write(
-            f"TIMER:SET {selected.value},{selected_group},{voltage},{current},{duration}"
+            command,
+            verification=_Verification(
+                f"TIMER:SET? {selected.value},{selected_group}",
+                {
+                    "voltage_v": float(voltage),
+                    "current_a": float(current),
+                    "duration_s": float(duration),
+                },
+                _parse_timer_step,
+            ),
         )
         return None
+
+    def _status_timer(self, response: str, channel: Channel) -> bool | None:
+        status = parse_status(response, self._device.model)
+        return status.ch1.timer if channel is Channel.CH1 else status.ch2.timer
 
 
 class System:
@@ -516,17 +660,29 @@ class RawSCPI:
 
     def execute(self, commands: Sequence[Command] | CommandBatch) -> BatchResult:
         batch = commands if isinstance(commands, CommandBatch) else CommandBatch(commands)
-        return self._device._executor.execute(batch)
+        return self._device._execute_raw_batch(batch)
 
 
 class SPD3000:
-    """Semantic SPD3303X/X-E/C driver over an injected command executor."""
+    """Semantic SPD3303X/X-E/C driver over an injected command executor.
+
+    ``batch`` collects semantic writes for one non-interleaved execution.
+    ``verify`` adds supported readbacks and raises
+    :class:`SPD3000VerificationError` when a completed write cannot be verified.
+    The reusable context managers compose as ``with psu.batch, psu.verify:``.
+    """
 
     def __init__(self, executor: Executor) -> None:
         self._executor = executor
         self._connection_type: ConnectionType | None = None
         self._connection_identifier: str | None = None
         self._closed = False
+        self._operation_lock = threading.RLock()
+        self._batch_active = False
+        self._pending_writes: list[_PendingWrite] = []
+        self._verify_depth = 0
+        self.batch = _BatchContext(self)
+        self.verify = _VerifyContext(self)
         try:
             self._session_identity = parse_identification(self._query("*IDN?"))
         except Exception:
@@ -776,7 +932,14 @@ class SPD3000:
     @instrument.setter
     def instrument(self, value: Channel | str) -> None:
         channel = _require_channel(value, programmable=True)
-        self._write(f"INST {channel.value}")
+        self._write(
+            f"INST {channel.value}",
+            verification=_Verification(
+                "INST?",
+                channel,
+                lambda response: _require_channel(response, programmable=True),
+            ),
+        )
 
     @property
     def ipaddr(self) -> str:
@@ -788,7 +951,15 @@ class SPD3000:
     @ipaddr.setter
     def ipaddr(self, value: str) -> None:
         self._require("network", "IPaddr")
-        self._write(f"IPADDR {_require_ipv4_address(value)}")
+        expected = _require_ipv4_address(value)
+        self._write(
+            f"IPADDR {expected}",
+            verification=_Verification(
+                "IPADDR?",
+                expected,
+                lambda response: _parse_ipv4_address("IPADDR?", response),
+            ),
+        )
 
     @property
     def maskaddr(self) -> str:
@@ -800,7 +971,11 @@ class SPD3000:
     @maskaddr.setter
     def maskaddr(self, value: str) -> None:
         self._require("network", "MASKaddr")
-        self._write(f"MASKADDR {_require_subnet_mask(value)}")
+        expected = _require_subnet_mask(value)
+        self._write(
+            f"MASKADDR {expected}",
+            verification=_Verification("MASKADDR?", expected, _parse_subnet_mask),
+        )
 
     @property
     def gateaddr(self) -> str:
@@ -812,7 +987,15 @@ class SPD3000:
     @gateaddr.setter
     def gateaddr(self, value: str) -> None:
         self._require("network", "GATEaddr")
-        self._write(f"GATEADDR {_require_ipv4_address(value)}")
+        expected = _require_ipv4_address(value)
+        self._write(
+            f"GATEADDR {expected}",
+            verification=_Verification(
+                "GATEADDR?",
+                expected,
+                lambda response: _parse_ipv4_address("GATEADDR?", response),
+            ),
+        )
 
     @property
     def dhcp(self) -> bool:
@@ -825,7 +1008,10 @@ class SPD3000:
     def dhcp(self, value: bool) -> None:
         self._require("network", "DHCP")
         enabled = _require_bool("dhcp", value)
-        self._write(f"DHCP {'ON' if enabled else 'OFF'}")
+        self._write(
+            f"DHCP {'ON' if enabled else 'OFF'}",
+            verification=_Verification("DHCP?", enabled, _parse_dhcp),
+        )
 
     @property
     def locked(self) -> bool:
@@ -837,12 +1023,20 @@ class SPD3000:
     def sav(self, slot: int) -> None:
         """Execute canonical ``*SAV <slot>``."""
 
-        self._write(f"*SAV {self._slot(slot)}")
+        self._write(
+            f"*SAV {self._slot(slot)}",
+            unavailable_reason="Siglent documents no query that confirms a saved setup slot",
+        )
 
     def rcl(self, slot: int) -> None:
         """Execute canonical ``*RCL <slot>``."""
 
-        self._write(f"*RCL {self._slot(slot)}")
+        self._write(
+            f"*RCL {self._slot(slot)}",
+            unavailable_reason=(
+                "Siglent documents no single query that confirms the complete recalled setup"
+            ),
+        )
 
     def save(self, slot: int) -> None:
         """Developer-friendly alias for :meth:`sav`."""
@@ -855,10 +1049,28 @@ class SPD3000:
         self.rcl(slot)
 
     def lock(self) -> None:
-        self._write("*LOCK")
+        if self.capabilities.lock_query:
+            verification = _Verification(
+                "*LOCK?", True, lambda response: _parse_bool("*LOCK?", response)
+            )
+            self._write("*LOCK", verification=verification)
+        else:
+            self._write(
+                "*LOCK",
+                unavailable_reason=f"{self.model.value} does not document *LOCK?",
+            )
 
     def unlock(self) -> None:
-        self._write("*UNLOCK")
+        if self.capabilities.lock_query:
+            verification = _Verification(
+                "*LOCK?", False, lambda response: _parse_bool("*LOCK?", response)
+            )
+            self._write("*UNLOCK", verification=verification)
+        else:
+            self._write(
+                "*UNLOCK",
+                unavailable_reason=f"{self.model.value} does not document *LOCK?",
+            )
 
     @staticmethod
     def _slot(slot: int) -> int:
@@ -887,22 +1099,181 @@ class SPD3000:
         if not bool(getattr(self.capabilities, capability)):
             raise UnsupportedFeatureError(f"{command} is not supported by {self.model.value}")
 
-    def _write(self, command: str) -> None:
-        self._executor.execute(CommandBatch([Write(command)]))
+    def _write(
+        self,
+        command: str,
+        *,
+        verification: _Verification | None = None,
+        unavailable_reason: str | None = None,
+    ) -> None:
+        with self._operation_lock:
+            if self._verify_depth:
+                selected_verification = verification or _Verification(
+                    query=None,
+                    expected=None,
+                    parser=None,
+                    unavailable_reason=(
+                        unavailable_reason
+                        or "No automatic verification is defined for this write operation"
+                    ),
+                )
+            else:
+                selected_verification = None
+            pending = _PendingWrite(command, selected_verification)
+            if self._batch_active:
+                self._pending_writes.append(pending)
+                return
+            self._execute_pending_writes([pending])
 
     def _query(self, command: str) -> str:
-        result = self._executor.execute(CommandBatch([Query(command)])).values[0]
-        if not isinstance(result, str):
-            raise SPD3000ProtocolError(f"Query {command!r} returned no response")
-        return result
+        with self._operation_lock:
+            if self._batch_active:
+                raise SPD3000ValidationError(
+                    "Queries cannot return values while with psu.batch is collecting writes"
+                )
+            result = self._executor.execute(CommandBatch([Query(command)])).values[0]
+            if not isinstance(result, str):
+                raise SPD3000ProtocolError(f"Query {command!r} returned no response")
+            return result
+
+    def _begin_batch(self) -> None:
+        self._operation_lock.acquire()
+        if self._batch_active:
+            self._operation_lock.release()
+            raise SPD3000ValidationError("Nested psu.batch contexts are not supported")
+        self._batch_active = True
+        self._pending_writes = []
+
+    def _end_batch(self, *, execute: bool) -> None:
+        try:
+            pending = self._pending_writes
+            self._pending_writes = []
+            self._batch_active = False
+            if execute and pending:
+                self._execute_pending_writes(pending)
+        finally:
+            self._operation_lock.release()
+
+    def _begin_verify(self) -> None:
+        self._operation_lock.acquire()
+        self._verify_depth += 1
+
+    def _end_verify(self) -> None:
+        try:
+            if self._verify_depth <= 0:
+                raise RuntimeError("psu.verify context exited without entering")
+            self._verify_depth -= 1
+        finally:
+            self._operation_lock.release()
+
+    def _execute_pending_writes(self, pending: Sequence[_PendingWrite]) -> None:
+        commands: list[Command] = []
+        verification_indexes: list[tuple[_PendingWrite, int | None]] = []
+        for operation in pending:
+            commands.append(Write(operation.command))
+            verification = operation.verification
+            if verification is None:
+                continue
+            query_index: int | None = None
+            if verification.query is not None:
+                query_index = len(commands)
+                commands.append(Query(verification.query))
+            verification_indexes.append((operation, query_index))
+
+        try:
+            result = self._executor.execute(CommandBatch(commands))
+        except SPD3000Error as exc:
+            failed_index = getattr(exc, "batch_command_index", None)
+            failed_verification = next(
+                (
+                    operation
+                    for operation, query_index in verification_indexes
+                    if query_index == failed_index
+                ),
+                None,
+            )
+            if failed_verification is None:
+                raise
+            verification = failed_verification.verification
+            assert verification is not None and verification.query is not None
+            raise SPD3000VerificationError(
+                (
+                    f"Verification query {verification.query!r} failed after "
+                    f"{failed_verification.command!r}: {exc}"
+                ),
+                command=failed_verification.command,
+                query=verification.query,
+                expected=verification.expected,
+            ) from exc
+
+        for operation, query_index in verification_indexes:
+            verification = operation.verification
+            assert verification is not None
+            if query_index is None:
+                raise SPD3000VerificationError(
+                    (
+                        f"Verification is unavailable after {operation.command!r}: "
+                        f"{verification.unavailable_reason}"
+                    ),
+                    command=operation.command,
+                    query=None,
+                    expected=verification.expected,
+                )
+            response = result.values[query_index]
+            if not isinstance(response, str):
+                raise SPD3000VerificationError(
+                    f"Verification query {verification.query!r} returned no response",
+                    command=operation.command,
+                    query=verification.query,
+                    expected=verification.expected,
+                )
+            assert verification.parser is not None
+            try:
+                actual = verification.parser(response)
+            except SPD3000Error as exc:
+                raise SPD3000VerificationError(
+                    (
+                        f"Verification query {verification.query!r} returned an unusable "
+                        f"response after {operation.command!r}: {exc}"
+                    ),
+                    command=operation.command,
+                    query=verification.query,
+                    expected=verification.expected,
+                    actual=response,
+                ) from exc
+            if actual != verification.expected:
+                raise SPD3000VerificationError(
+                    (
+                        f"Verification failed after {operation.command!r}: "
+                        f"{verification.query!r} returned {actual!r}, "
+                        f"expected {verification.expected!r}"
+                    ),
+                    command=operation.command,
+                    query=verification.query,
+                    expected=verification.expected,
+                    actual=actual,
+                )
+
+    def _execute_raw_batch(self, batch: CommandBatch) -> BatchResult:
+        with self._operation_lock:
+            if self._batch_active:
+                raise SPD3000ValidationError(
+                    "psu.scpi.execute() cannot run inside a collecting psu.batch context"
+                )
+            if self._verify_depth:
+                raise SPD3000ValidationError(
+                    "psu.verify cannot infer expected values for psu.scpi.execute()"
+                )
+            return self._executor.execute(batch)
 
     def close(self) -> None:
-        if self._closed:
-            return
-        try:
-            self._executor.close()
-        finally:
-            self._closed = True
+        with self._operation_lock:
+            if self._closed:
+                return
+            try:
+                self._executor.close()
+            finally:
+                self._closed = True
 
     def __str__(self) -> str:
         """Return a concise identity and connection summary without instrument I/O."""

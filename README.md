@@ -20,6 +20,7 @@ Connecting through the [gateway server](#gateway-server) is the recommended way 
   - [2. Confirm the mapping with the helper](#2-confirm-the-mapping-with-the-helper)
   - [Intentional `OUTPut` convenience exception](#intentional-output-convenience-exception)
 - [SCPI-shaped API](#scpi-shaped-api)
+- [Batching and verification](#batching-and-verification)
 - [Timing](#timing)
 - [Gateway server](#gateway-server)
   - [Install](#install)
@@ -113,6 +114,7 @@ with spd.SPD3000.connect("socket", "192.168.1.50") as psu:
 ```
 
 See [From a manual SCPI command to Python](#from-a-manual-scpi-command-to-python) to find and use the commands and corresponding library methods.
+See [Batching and verification](#batching-and-verification) when several semantic writes must not interleave or their resulting state must be read back automatically.
 Every instrument-state property read performs a fresh hardware query; output state and measurements are never answered from a write cache.
 `str(psu)` instead summarizes the identity cached during connection, the normalized connection destination, and whether the local driver session is open without issuing another command.
 The reported `open` state means that `close()` has not been called; it is not an active reachability probe.
@@ -402,6 +404,56 @@ They are validated and normalized by the canonical root properties.
 Setting a static address does not silently disable DHCP.
 
 Use `lookup_command("MEAS:VOLT?")` to discover the corresponding Python path, or use `psu.scpi.write()`, `query()`, and `execute()` as an explicit low-level escape hatch.
+
+## Batching and verification
+
+Ordinary setters execute immediately and do not perform an implicit readback.
+Use `psu.batch` to collect semantic write operations and submit them as one non-interleaved command batch:
+
+```python
+with psu.batch:
+    psu.ch1.voltage = 5.0
+    psu.ch1.current = 0.5
+    psu.ch1.output = True
+```
+
+The block above sends nothing until normal block exit.
+If the Python block raises an exception, its collected writes are discarded without being sent.
+Property reads and other queries cannot return deferred values and therefore raise `SPD3000ValidationError` inside `psu.batch`.
+
+Use `psu.verify` when each semantic write must be followed by its documented readback and checked against the requested value:
+
+```python
+with psu.verify:
+    psu.ch1.voltage = 5.0
+```
+
+Without `psu.batch`, each setter executes its own non-interleaved write/query pair.
+The two contexts compose, so several verified settings can travel as one batch:
+
+```python
+with psu.batch, psu.verify:
+    psu.ch1.voltage = 5.0
+    psu.ch1.current = 0.5
+    psu.ch1.output = True
+```
+
+If a write fails, its original driver or gateway exception is preserved.
+If the write succeeds but its readback fails, is malformed, differs from the requested value, or does not exist, the driver raises `SPD3000VerificationError`.
+The exception exposes `command`, `query`, `expected`, and `actual`; the original readback exception is available as `__cause__`.
+
+```python
+try:
+    with psu.verify:
+        psu.ch3.output = True
+except spd.SPD3000VerificationError as exc:
+    print(exc.command)   # "OUTP CH3,ON" was sent
+    print(exc.query)     # None: Siglent documents no CH3 output-state query
+```
+
+Verification errors never imply rollback.
+In particular, an unqueryable setting such as CH3 output is applied first and then reported as unverifiable, and writes completed before a later batch failure may remain applied.
+The raw `psu.scpi.execute()` escape hatch cannot be nested inside either semantic context because the driver cannot infer its expected results.
 
 ## Timing
 

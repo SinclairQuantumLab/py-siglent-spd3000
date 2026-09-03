@@ -27,6 +27,25 @@ class SPD3000ValidationError(SPD3000Error, ValueError):
     """A value is invalid for the selected SPD3000 model."""
 
 
+class SPD3000VerificationError(SPD3000Error):
+    """A write completed but its requested readback could not verify the result."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        command: str | None = None,
+        query: str | None = None,
+        expected: object = None,
+        actual: object = None,
+    ) -> None:
+        super().__init__(message)
+        self.command = command
+        self.query = query
+        self.expected = expected
+        self.actual = actual
+
+
 class UnsupportedFeatureError(SPD3000Error, NotImplementedError):
     """The connected model does not implement the requested feature."""
 
@@ -76,6 +95,7 @@ CANONICAL_EXCEPTION_TYPES: dict[str, type[SPD3000Error]] = {
         SPD3000ProtocolError,
         SPD3000CommandError,
         SPD3000ValidationError,
+        SPD3000VerificationError,
         UnsupportedFeatureError,
         UnknownModelError,
     )

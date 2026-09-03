@@ -144,12 +144,25 @@ def test_readme_has_table_of_contents_for_major_sections() -> None:
         "#from-a-manual-scpi-command-to-python",
         "#intentional-output-convenience-exception",
         "#scpi-shaped-api",
+        "#batching-and-verification",
         "#timing",
         "#gateway-server",
         "#model-differences",
         "#development",
     ):
         assert f"]({anchor})" in contents
+
+
+def test_batching_and_verification_are_documented_as_separate_contexts() -> None:
+    readme = (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
+    guide = readme.split("## Batching and verification", 1)[1].split("## Timing", 1)[0]
+
+    assert "with psu.batch:" in guide
+    assert "with psu.verify:" in guide
+    assert "with psu.batch, psu.verify:" in guide
+    assert "SPD3000VerificationError" in guide
+    assert "never imply rollback" in guide
+    assert "applied first and then reported as unverifiable" in guide
 
 
 def test_jupyter_hardware_test_guide_covers_setup_inputs_and_confirmations() -> None:

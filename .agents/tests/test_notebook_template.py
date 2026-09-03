@@ -31,9 +31,7 @@ def test_hardware_notebook_template_is_clean_and_well_formed() -> None:
 def test_connection_placeholder_is_confined_to_connection_settings_cell() -> None:
     notebook = _notebook()
     placeholder_cells = [
-        cell
-        for cell in notebook["cells"]
-        if 'identifier="<IDENTIFIER>"' in "".join(cell["source"])
+        cell for cell in notebook["cells"] if 'identifier="<IDENTIFIER>"' in "".join(cell["source"])
     ]
 
     assert len(placeholder_cells) == 1
@@ -88,6 +86,9 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
         "psu.network.settings",
         "psu.timer.set",
         "psu.output.wave",
+        "with psu.batch, psu.verify:",
+        "with psu.batch:",
+        "with psu.verify:",
         "psu.lock()",
         "psu.close()",
         "Cancelled before sending any write command",

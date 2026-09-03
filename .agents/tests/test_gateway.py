@@ -10,6 +10,7 @@ from contextlib import contextmanager
 import pytest
 
 from siglent_spd3000 import (
+    SPD3000,
     CommandBatch,
     ExecutionSettings,
     GatewayAuthenticationError,
@@ -80,15 +81,48 @@ def test_gateway_executes_one_persistent_session() -> None:
     assert physical.closed is True
 
 
+def test_semantic_verified_batch_reaches_gateway_as_one_batch() -> None:
+    physical = PhysicalExecutor(
+        {
+            "*IDN?": ["Siglent Technologies,SPD3303X,SPD0001,1.0"],
+            "CH1:VOLT?": ["5"],
+            "CH1:CURR?": ["0.5"],
+        }
+    )
+    with (
+        running_server(physical) as server,
+        SPD3000(
+            GatewayExecutor(
+                "127.0.0.1", port=server.port, settings=ExecutionSettings(0.01)
+            )
+        ) as psu,
+        psu.batch,
+        psu.verify,
+    ):
+        psu.ch1.voltage = 5.0
+        psu.ch1.current = 0.5
+
+    assert physical.batches == [
+        ["*IDN?"],
+        ["CH1:VOLT 5", "CH1:VOLT?", "CH1:CURR 0.5", "CH1:CURR?"],
+    ]
+
+
 def test_gateway_reconstructs_southbound_exception_and_traceback() -> None:
     physical = PhysicalExecutor()
     physical.error = SPD3000TimeoutError("device timed out")
+    physical.error.batch_command_index = 1
+    physical.error.batch_command_kind = "query"
+    physical.error.batch_command = "VERIFY?"
     with running_server(physical) as server:
         executor = GatewayExecutor("127.0.0.1", port=server.port, settings=ExecutionSettings(0.01))
         try:
             with pytest.raises(SPD3000TimeoutError, match="device timed out") as caught:
                 executor.execute(CommandBatch([Query("Q?")]))
             assert "test_gateway.py" in caught.value.remote_traceback
+            assert caught.value.batch_command_index == 1
+            assert caught.value.batch_command_kind == "query"
+            assert caught.value.batch_command == "VERIFY?"
         finally:
             executor.close()
 

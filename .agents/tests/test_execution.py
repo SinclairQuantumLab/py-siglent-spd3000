@@ -10,6 +10,7 @@ from siglent_spd3000 import (
     DirectExecutor,
     ExecutionSettings,
     Query,
+    SPD3000TimeoutError,
     SPD3000TimingWarning,
     SPD3000ValidationError,
     Write,
@@ -103,3 +104,18 @@ def test_executor_close_is_idempotent() -> None:
     executor.close()
     executor.close()
     assert transport.closed is True
+
+
+def test_direct_executor_annotates_the_failed_batch_command() -> None:
+    class TimeoutTransport(FakeTransport):
+        def read(self) -> bytes:
+            raise TimeoutError("timed out")
+
+    executor = DirectExecutor(TimeoutTransport(), ExecutionSettings(0.01))
+
+    with pytest.raises(SPD3000TimeoutError) as caught:
+        executor.execute(CommandBatch([Write("SET"), Query("READ?")]))
+
+    assert caught.value.batch_command_index == 1
+    assert caught.value.batch_command_kind == "query"
+    assert caught.value.batch_command == "READ?"

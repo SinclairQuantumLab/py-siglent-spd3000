@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+import siglent_spd3000 as spd
 from siglent_spd3000 import (
     SPD3000,
     Channel,
@@ -11,8 +12,10 @@ from siglent_spd3000 import (
     OperatingMode,
     OutputState,
     SPD3000ProtocolError,
+    SPD3000TimeoutError,
     SPD3000TimingWarning,
     SPD3000ValidationError,
+    SPD3000VerificationError,
     TimerState,
     TrackingMode,
     UnsupportedFeatureError,
@@ -474,3 +477,199 @@ def test_context_manager_closes_executor() -> None:
     with SPD3000(executor):
         pass
     assert executor.closed is True
+
+
+def test_batch_collects_semantic_writes_and_executes_once_on_exit() -> None:
+    executor = FakeExecutor(responses_for("SPD3303X"))
+    psu = SPD3000(executor)
+
+    with psu.batch:
+        psu.ch1.voltage = 5.0
+        psu.ch1.current = 0.5
+        psu.ch1.output = True
+        assert executor.commands == ["*IDN?"]
+
+    assert executor.batches[-1] == ["CH1:VOLT 5", "CH1:CURR 0.5", "OUTP CH1,ON"]
+
+
+def test_batch_discards_pending_writes_when_body_raises() -> None:
+    executor = FakeExecutor(responses_for("SPD3303X"))
+    psu = SPD3000(executor)
+
+    with pytest.raises(RuntimeError, match="stop"), psu.batch:
+        psu.ch1.voltage = 5.0
+        raise RuntimeError("stop")
+
+    assert executor.commands == ["*IDN?"]
+
+
+def test_batch_rejects_queries_and_nested_batch_contexts() -> None:
+    executor = FakeExecutor(responses_for("SPD3303X"))
+    psu = SPD3000(executor)
+
+    with pytest.raises(SPD3000ValidationError, match="cannot return values"), psu.batch:
+        psu.ch1.voltage = 5.0
+        _ = psu.ch1.voltage
+    assert executor.commands == ["*IDN?"]
+
+    with pytest.raises(SPD3000ValidationError, match="Nested"), psu.batch, psu.batch:
+        pass
+
+
+def test_verify_executes_each_setter_as_its_own_write_query_batch() -> None:
+    executor = FakeExecutor(
+        responses_for(
+            "SPD3303X",
+            **{
+                "CH1:VOLT?": ["5"],
+                "CH1:CURR?": ["0.5"],
+            },
+        )
+    )
+    psu = SPD3000(executor)
+
+    with psu.verify:
+        psu.ch1.voltage = 5.0
+        psu.ch1.current = 0.5
+
+    assert executor.batches[-2:] == [
+        ["CH1:VOLT 5", "CH1:VOLT?"],
+        ["CH1:CURR 0.5", "CH1:CURR?"],
+    ]
+
+
+def test_batch_and_verify_compose_into_one_non_interleaved_batch() -> None:
+    executor = FakeExecutor(
+        responses_for(
+            "SPD3303X",
+            **{
+                "CH1:VOLT?": ["5"],
+                "CH1:CURR?": ["0.5"],
+                "SYST:STAT?": ["0x10"],
+            },
+        )
+    )
+    psu = SPD3000(executor)
+
+    with psu.batch, psu.verify:
+        psu.ch1.voltage = 5.0
+        psu.ch1.current = 0.5
+        psu.ch1.output = True
+
+    assert executor.batches[-1] == [
+        "CH1:VOLT 5",
+        "CH1:VOLT?",
+        "CH1:CURR 0.5",
+        "CH1:CURR?",
+        "OUTP CH1,ON",
+        "SYST:STAT?",
+    ]
+
+
+def test_verify_mismatch_raises_structured_verification_error_after_write() -> None:
+    executor = FakeExecutor(responses_for("SPD3303X", **{"CH1:VOLT?": ["4.9"]}))
+    psu = SPD3000(executor)
+
+    with pytest.raises(SPD3000VerificationError, match=r"expected 5\.0") as caught, psu.verify:
+        psu.ch1.voltage = 5.0
+
+    assert caught.value.command == "CH1:VOLT 5"
+    assert caught.value.query == "CH1:VOLT?"
+    assert caught.value.expected == 5.0
+    assert caught.value.actual == 4.9
+    assert executor.commands[-2:] == ["CH1:VOLT 5", "CH1:VOLT?"]
+
+
+def test_verify_wraps_a_failed_readback_but_not_a_failed_write() -> None:
+    class FailingExecutor(FakeExecutor):
+        def __init__(self, *, failed_index: int) -> None:
+            super().__init__(responses_for("SPD3303X"))
+            self.failed_index = failed_index
+
+        def execute(self, batch: spd.CommandBatch) -> spd.BatchResult:
+            if any(command.text == "CH1:VOLT?" for command in batch.commands):
+                self.batches.append([command.text for command in batch.commands])
+                self.commands.extend(
+                    command.text for command in batch.commands[: self.failed_index + 1]
+                )
+                error = SPD3000TimeoutError("timed out")
+                error.batch_command_index = self.failed_index
+                error.batch_command_kind = (
+                    "query" if isinstance(batch.commands[self.failed_index], spd.Query) else "write"
+                )
+                error.batch_command = batch.commands[self.failed_index].text
+                raise error
+            return super().execute(batch)
+
+    query_failure = FailingExecutor(failed_index=1)
+    query_psu = SPD3000(query_failure)
+    with pytest.raises(SPD3000VerificationError) as caught, query_psu.verify:
+        query_psu.ch1.voltage = 5.0
+    assert isinstance(caught.value.__cause__, SPD3000TimeoutError)
+    assert caught.value.command == "CH1:VOLT 5"
+    assert caught.value.query == "CH1:VOLT?"
+
+    write_failure = FailingExecutor(failed_index=0)
+    with pytest.raises(SPD3000TimeoutError), SPD3000(write_failure).verify as psu:
+        psu.ch1.voltage = 5.0
+
+
+def test_verify_reports_unqueryable_state_only_after_sending_the_write() -> None:
+    executor = FakeExecutor(responses_for("SPD3303X"))
+    psu = SPD3000(executor)
+
+    with pytest.raises(SPD3000VerificationError, match="no query") as caught, psu.verify:
+        psu.ch3.output = True
+
+    assert executor.commands[-1] == "OUTP CH3,ON"
+    assert caught.value.command == "OUTP CH3,ON"
+    assert caught.value.query is None
+    assert caught.value.expected is True
+    assert caught.value.actual is None
+
+
+def test_verify_supports_the_remaining_semantic_write_commands() -> None:
+    executor = FakeExecutor(
+        responses_for(
+            "SPD3303X",
+            **{
+                "INST?": ["CH2"],
+                "SYST:STAT?": ["0x0c", "0x204", "0x44"],
+                "TIMER:SET? CH1,1": ["3,0.5,2"],
+                "IPADDR?": ["192.168.1.50"],
+                "MASKADDR?": ["255.255.255.0"],
+                "GATEADDR?": ["192.168.1.1"],
+                "DHCP?": ["DHCP:OFF"],
+                "*LOCK?": ["1", "0"],
+            },
+        )
+    )
+    psu = SPD3000(executor)
+
+    with psu.verify:
+        psu.instrument = Channel.CH2
+        psu.output.track(TrackingMode.SERIES)
+        psu.output.wave(Channel.CH2, WaveformState.ON)
+        psu.timer(Channel.CH1, TimerState.ON)
+        psu.timer.set(Channel.CH1, 1, 3.0, 0.5, 2.0)
+        psu.ipaddr = "192.168.1.50"
+        psu.maskaddr = "255.255.255.0"
+        psu.gateaddr = "192.168.1.1"
+        psu.dhcp = False
+        psu.lock()
+        psu.unlock()
+
+    assert executor.batches[-1] == ["*UNLOCK", "*LOCK?"]
+
+
+def test_verify_reports_memory_and_raw_writes_as_unverifiable_after_execution() -> None:
+    executor = FakeExecutor(responses_for("SPD3303X"))
+    psu = SPD3000(executor)
+
+    with pytest.raises(SPD3000VerificationError, match="saved setup slot"), psu.verify:
+        psu.save(1)
+    assert executor.commands[-1] == "*SAV 1"
+
+    with pytest.raises(SPD3000VerificationError, match="No automatic"), psu.verify:
+        psu.scpi.write("CUSTOM 1")
+    assert executor.commands[-1] == "CUSTOM 1"

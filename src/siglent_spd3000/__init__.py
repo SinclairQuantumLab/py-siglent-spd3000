@@ -16,6 +16,7 @@ from .exceptions import (
     SPD3000TimeoutError,
     SPD3000TimingWarning,
     SPD3000ValidationError,
+    SPD3000VerificationError,
     UnknownModelError,
     UnsupportedFeatureError,
 )
@@ -80,6 +81,7 @@ __all__ = [
     "SPD3000TimeoutError",
     "SPD3000TimingWarning",
     "SPD3000ValidationError",
+    "SPD3000VerificationError",
     "SystemError",
     "SystemStatus",
     "TimerState",

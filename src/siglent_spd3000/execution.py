@@ -12,6 +12,7 @@ from typing import Protocol
 
 from .exceptions import (
     SPD3000ConnectionError,
+    SPD3000Error,
     SPD3000ProtocolError,
     SPD3000TimeoutError,
     SPD3000TimingWarning,
@@ -173,7 +174,7 @@ class DirectExecutor:
             if self._closed:
                 raise SPD3000ConnectionError("Executor is closed")
             values: list[str | None] = []
-            for command in batch.commands:
+            for command_index, command in enumerate(batch.commands):
                 try:
                     self._wait_before_write()
                     self.transport.write(command.text.encode("ascii") + b"\n")
@@ -183,14 +184,17 @@ class DirectExecutor:
                         values.append(self._decode(self.transport.read()))
                     else:
                         values.append(None)
-                except SPD3000ConnectionError:
-                    raise
-                except SPD3000TimeoutError:
+                except SPD3000Error as exc:
+                    _annotate_execution_error(exc, command_index, command)
                     raise
                 except TimeoutError as exc:
-                    raise SPD3000TimeoutError(str(exc)) from exc
+                    timeout_error = SPD3000TimeoutError(str(exc))
+                    _annotate_execution_error(timeout_error, command_index, command)
+                    raise timeout_error from exc
                 except OSError as exc:
-                    raise SPD3000ConnectionError(str(exc)) from exc
+                    connection_error = SPD3000ConnectionError(str(exc))
+                    _annotate_execution_error(connection_error, command_index, command)
+                    raise connection_error from exc
             return BatchResult(tuple(values))
 
     def _wait_before_write(self) -> None:
@@ -218,3 +222,11 @@ class DirectExecutor:
 
     def __exit__(self, *_args: object) -> None:
         self.close()
+
+
+def _annotate_execution_error(exc: SPD3000Error, index: int, command: Command) -> None:
+    """Attach allow-listed batch position metadata for higher-level error handling."""
+
+    exc.__dict__["batch_command_index"] = index
+    exc.__dict__["batch_command_kind"] = "query" if isinstance(command, Query) else "write"
+    exc.__dict__["batch_command"] = command.text

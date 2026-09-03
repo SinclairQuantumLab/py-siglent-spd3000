@@ -18,9 +18,11 @@ class FakeExecutor:
         for command, values in (responses or {}).items():
             self.responses[command].extend(values)
         self.commands: list[str] = []
+        self.batches: list[list[str]] = []
         self.closed = False
 
     def execute(self, batch: CommandBatch) -> BatchResult:
+        self.batches.append([command.text for command in batch.commands])
         values: list[str | None] = []
         for command in batch.commands:
             self.commands.append(command.text)
