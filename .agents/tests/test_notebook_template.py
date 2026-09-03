@@ -22,7 +22,10 @@ def test_hardware_notebook_template_is_clean_and_well_formed() -> None:
             assert index > 0 and notebook["cells"][index - 1]["cell_type"] == "markdown"
             assert cell["execution_count"] is None
             assert cell["outputs"] == []
-            compile("".join(cell["source"]), f"notebook-cell-{index}", "exec")
+            source = "".join(cell["source"]).replace(
+                "spd.ConnectionType.<TYPE>", "spd.ConnectionType.SOCKET"
+            )
+            compile(source, f"notebook-cell-{index}", "exec")
 
 
 def test_connection_placeholder_is_confined_to_connection_settings_cell() -> None:
@@ -30,14 +33,14 @@ def test_connection_placeholder_is_confined_to_connection_settings_cell() -> Non
     placeholder_cells = [
         cell
         for cell in notebook["cells"]
-        if "<REPLACE_WITH_IDENTIFIER>" in "".join(cell["source"])
+        if 'IDENTIFIER = "<IDENTIFIER>"' in "".join(cell["source"])
     ]
 
     assert len(placeholder_cells) == 1
     assert "connection-settings" in placeholder_cells[0]["metadata"]["tags"]
 
 
-def test_connection_settings_are_explicit_and_transport_neutral() -> None:
+def test_connection_settings_are_clear_and_connection_specific() -> None:
     notebook = _notebook()
     settings_cells = [
         cell
@@ -47,10 +50,15 @@ def test_connection_settings_are_explicit_and_transport_neutral() -> None:
 
     assert len(settings_cells) == 1
     settings = "".join(settings_cells[0]["source"])
-    assert "CONNECTION_TYPE: spd.ConnectionType | None = None" in settings
+    assert "CONNECTION_TYPE = spd.ConnectionType.<TYPE>  # e.g., SOCKET, VISA" in settings
     assert "connection=CONNECTION_TYPE" in settings
-    assert "CONNECTION = spd.ConnectionType.SOCKET" not in settings
-    assert "IDENTIFIER = \"<REPLACE_WITH_IDENTIFIER>\"" in settings
+    assert "CONNECTION =" not in settings
+    assert 'IDENTIFIER = "<IDENTIFIER>"' in settings
+    assert "VISA_BACKEND" not in settings
+    assert "GATEWAY_AUTH_FILE" not in settings
+    assert '# visa_backend="@py"' in settings
+    assert '# token=spd.load_gateway_auth("gateway-auth.toml")' in settings
+    assert "raise ValueError" not in settings
 
 
 def test_notebook_template_is_linked_and_working_copy_is_ignored() -> None:
@@ -81,6 +89,9 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
         "finally:",
     ):
         assert expected in notebook_text
+
+    assert "validate_grid_value" not in notebook_text
+    assert "from decimal import Decimal" not in notebook_text
     assert "ENERGIZE_OUTPUT = False" in notebook_text
     assert "RUN_CH3_OUTPUT_TEST = False" in notebook_text
     assert "RUN_TIMER_WAVEFORM_TEST = False" in notebook_text
