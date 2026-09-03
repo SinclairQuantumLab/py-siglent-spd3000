@@ -50,8 +50,10 @@ def test_connection_settings_are_clear_and_connection_specific() -> None:
 
     assert len(settings_cells) == 1
     settings = "".join(settings_cells[0]["source"])
-    assert "connection=spd.ConnectionType.<TYPE>,  # e.g., SOCKET, VISA" in settings
-    assert 'identifier="<IDENTIFIER>"' in settings
+    assert "connection=spd.ConnectionType.<TYPE>,  # e.g., SOCKET, VXI11, VISA, GATEWAY" in settings
+    assert 'identifier="<IDENTIFIER>",  # e.g., instrument IP, VISA resource' in settings
+    assert "timeout_s=5.0,  # communication timeout in seconds" in settings
+    assert "min_command_interval_ms=100.0,  # delay between instrument commands" in settings
     assert "CONNECTION_TYPE =" not in settings
     assert "IDENTIFIER =" not in settings
     assert "TIMEOUT_S =" not in settings
