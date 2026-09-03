@@ -1538,16 +1538,19 @@ class SPD3000:
                 self._closed = True
 
     def __str__(self) -> str:
-        """Return a concise identity and connection summary without instrument I/O."""
+        """Return identity, connection, and execution settings without instrument I/O."""
 
-        identity = self._session_identity
-        connection_type = (
-            self._connection_type.value
-            if self._connection_type is not None
-            else "injected executor"
-        )
-        connection_identifier = self._connection_identifier or type(self._executor).__name__
-        state = "open" if self.is_open else "closed"
+        with self._operation_lock:
+            identity = self._session_identity
+            connection_type = (
+                self._connection_type.value
+                if self._connection_type is not None
+                else "injected executor"
+            )
+            connection_identifier = self._connection_identifier or type(self._executor).__name__
+            state = "open" if not self._closed else "closed"
+            settings = self._executor.settings
+            verify_writes_globally = self._verify_writes_globally
         return "\n".join(
             (
                 "SIGLENT SPD3000 Series power supply driver instance",
@@ -1557,6 +1560,14 @@ class SPD3000:
                 f"  - Type: {connection_type}",
                 f"  - Identifier: {connection_identifier}",
                 f"  - State: {state}",
+                "- Execution settings:",
+                f"  - Timeout: {settings.timeout:.15g} s",
+                (
+                    "  - Minimum command interval: "
+                    f"{settings.min_command_interval * 1000:.15g} ms"
+                ),
+                "  - Verify writes globally: "
+                f"{'enabled' if verify_writes_globally else 'disabled'}",
             )
         )
 

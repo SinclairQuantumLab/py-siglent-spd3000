@@ -163,7 +163,8 @@ def test_backend_connection_helpers_are_not_public_constructors() -> None:
 
 def test_string_summary_uses_cached_identity_and_local_connection_state() -> None:
     executor = FakeExecutor(responses_for("SPD3303X"))
-    psu = SPD3000(executor)
+    executor.settings = ExecutionSettings(min_command_interval=0.025, timeout=7.5)
+    psu = SPD3000(executor, verify_writes_globally=True)
     psu._set_connection_metadata(ConnectionType.SOCKET, "192.168.1.50:5025")
 
     assert str(psu) == (
@@ -173,7 +174,11 @@ def test_string_summary_uses_cached_identity_and_local_connection_state() -> Non
         "- Connection:\n"
         "  - Type: socket\n"
         "  - Identifier: 192.168.1.50:5025\n"
-        "  - State: open"
+        "  - State: open\n"
+        "- Execution settings:\n"
+        "  - Timeout: 7.5 s\n"
+        "  - Minimum command interval: 25 ms\n"
+        "  - Verify writes globally: enabled"
     )
     assert psu.connection_type is ConnectionType.SOCKET
     assert psu.connection_identifier == "192.168.1.50:5025"
@@ -182,7 +187,8 @@ def test_string_summary_uses_cached_identity_and_local_connection_state() -> Non
 
     psu.close()
 
-    assert str(psu).endswith("  - State: closed")
+    assert "  - State: closed\n" in str(psu)
+    assert "  - Verify writes globally: enabled" in str(psu)
     assert psu.is_open is False
     assert executor.commands == ["*IDN?"]
 
@@ -198,7 +204,11 @@ def test_string_summary_names_an_injected_executor() -> None:
         "- Connection:\n"
         "  - Type: injected executor\n"
         "  - Identifier: FakeExecutor\n"
-        "  - State: open"
+        "  - State: open\n"
+        "- Execution settings:\n"
+        "  - Timeout: 5 s\n"
+        "  - Minimum command interval: 100 ms\n"
+        "  - Verify writes globally: disabled"
     )
     assert psu.connection_type is None
     assert psu.connection_identifier is None
