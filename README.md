@@ -249,6 +249,7 @@ Read every displayed plan before entering a confirmation phrase; pressing Enter 
 - The CH3 output test runs only after setting `RUN_CH3_OUTPUT_TEST = True` and then entering `ENERGIZE CH3`.
 - The timer and waveform test runs only after setting `RUN_TIMER_WAVEFORM_TEST = True` and then entering the displayed phrase such as `OVERWRITE TIMER CH1 5`.
 - The front-panel lock test runs only after setting `RUN_FRONT_PANEL_LOCK_TEST = True` and then entering `LOCK FRONT PANEL`.
+  Because SIGLENT does not specify the `*LOCK?` response format or transport/firmware limitations, the notebook skips programmatic lock-state assertions when that preliminary query does not answer and asks for physical front-panel verification instead.
 - The error-queue read is not a write, but it consumes one queued entry and therefore runs only after setting `READ_ONE_ERROR_QUEUE_ENTRY = True`.
 
 Disconnect sensitive DUTs before write tests, use a correctly rated load or meter, and keep the instrument front panel accessible.
@@ -545,10 +546,12 @@ A remotely accessible gateway uses token authentication, but the protocol is not
 | Raw socket / VXI-11 | Yes | Yes | No |
 | USBTMC through VISA | Yes | Yes | Yes |
 | `*LOCK` / `*UNLOCK` | Yes | Yes | Yes |
-| `*LOCK?` | Yes | Yes | No |
+| `*LOCK?` | Documented; verify on the target firmware and connection | Documented; verify on the target firmware and connection | No |
 
 Unsupported model features raise `UnsupportedFeatureError` before any command is sent.
 Values outside documented limits or off the model's programming grid raise `SPD3000ValidationError`; the driver never silently rounds them.
+`psu.capabilities` describes model-level vendor documentation rather than probing every command at connection time.
+An unanswered documented query still raises `SPD3000TimeoutError`; the hardware notebook handles the known `*LOCK?` case as an optional runtime check without hiding timeouts from normal application code.
 
 ## Development
 

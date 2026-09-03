@@ -51,6 +51,37 @@ def test_socket_transport_reports_early_disconnect(monkeypatch: pytest.MonkeyPat
         transport.read()
 
 
+@pytest.mark.parametrize(
+    ("chunks", "message"),
+    [
+        ([TimeoutError("timed out")], "without receiving any bytes"),
+        ([b"partial", TimeoutError("timed out")], "7 byte\\(s\\) without LF termination"),
+    ],
+)
+def test_socket_transport_timeout_reports_buffer_state(
+    monkeypatch: pytest.MonkeyPatch,
+    chunks: list[bytes | BaseException],
+    message: str,
+) -> None:
+    class TimeoutSocket(FakeSocket):
+        def __init__(self, events: list[bytes | BaseException]) -> None:
+            super().__init__([])
+            self.events = events
+
+        def recv(self, _size: int) -> bytes:
+            event = self.events.pop(0)
+            if isinstance(event, BaseException):
+                raise event
+            return event
+
+    raw = TimeoutSocket(chunks)
+    monkeypatch.setattr("socket.create_connection", lambda *_args, **_kwargs: raw)
+    transport = SocketTransport("instrument")
+
+    with pytest.raises(SPD3000TimeoutError, match=message):
+        transport.read()
+
+
 class FakeVisaResource:
     def __init__(self) -> None:
         self.timeout = 0

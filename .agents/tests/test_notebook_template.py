@@ -106,6 +106,10 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
     assert "print(psu.system.error)" in notebook_text
     assert "print(psu.network.settings)" in notebook_text
     assert 'print(f\\"Front panel locked: {psu.locked}\\")' in notebook_text
+    assert "LOCK_QUERY_RESPONDS = False" in notebook_text
+    assert "except (spd.SPD3000TimeoutError, spd.SPD3000ProtocolError)" in notebook_text
+    assert "if LOCK_QUERY_RESPONDS:" in notebook_text
+    assert "if psu.capabilities.lock_query:" in notebook_text
     assert "asdict(" not in notebook_text
     assert "json.dumps" not in notebook_text
     assert "ENERGIZE_OUTPUT = False" in notebook_text

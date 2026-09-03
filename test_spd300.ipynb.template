@@ -138,7 +138,8 @@
    "source": [
     "## 5. Model-specific read-only checks\n",
     "\n",
-    "Network settings and front-panel lock state are queried only when the detected model supports those queries."
+    "Network settings and front-panel lock state are queried only when the detected model documents those queries.\n",
+    "Some SPD3303X firmware/connection combinations do not answer the separately documented `*LOCK?` command; that optional check is reported without stopping the remaining tests."
    ]
   },
   {
@@ -152,8 +153,18 @@
     "else:\n",
     "    print(f\"Network queries are not supported by {psu.model.value}\")\n",
     "\n",
+    "LOCK_QUERY_RESPONDS = False\n",
     "if psu.capabilities.lock_query:\n",
-    "    print(f\"Front panel locked: {psu.locked}\")\n",
+    "    try:\n",
+    "        print(f\"Front panel locked: {psu.locked}\")\n",
+    "    except (spd.SPD3000TimeoutError, spd.SPD3000ProtocolError) as exc:\n",
+    "        print(\n",
+    "            f\"Warning: *LOCK? is documented for {psu.model.value} but did not return a usable \"\n",
+    "            f\"response on this connection ({exc}). Later lock-state assertions will be skipped; \"\n",
+    "            \"verify lock and unlock at the front panel.\"\n",
+    "        )\n",
+    "    else:\n",
+    "        LOCK_QUERY_RESPONDS = True\n",
     "else:\n",
     "    print(f\"Lock-state query is not supported by {psu.model.value}\")"
    ]
@@ -402,7 +413,7 @@
     "## 12. Optional front-panel lock round trip\n",
     "\n",
     "This test locks the front panel only after confirmation and always sends `*UNLOCK` in `finally`.\n",
-    "SPD3303C supports lock/unlock commands but does not provide the documented `*LOCK?` verification query."
+    "Programmatic state assertions run only if `*LOCK?` returned a usable response in the earlier read-only check; otherwise confirm both operations physically at the front panel."
    ]
   },
   {
@@ -419,14 +430,18 @@
     "else:\n",
     "    try:\n",
     "        psu.lock()\n",
-    "        if psu.capabilities.lock_query:\n",
-    "            assert psu.locked is True\n",
+    "        if LOCK_QUERY_RESPONDS:\n",
+    "            try:\n",
+    "                assert psu.locked is True\n",
+    "            except (spd.SPD3000TimeoutError, spd.SPD3000ProtocolError) as exc:\n",
+    "                LOCK_QUERY_RESPONDS = False\n",
+    "                print(f\"Warning: *LOCK? stopped responding ({exc}); verify the lock physically.\")\n",
     "        print(\"Confirm that the front-panel controls are locked.\")\n",
     "    finally:\n",
     "        psu.unlock()\n",
-    "        if psu.capabilities.lock_query:\n",
+    "        if LOCK_QUERY_RESPONDS:\n",
     "            assert psu.locked is False\n",
-    "        print(\"Sent *UNLOCK.\")"
+    "        print(\"Sent *UNLOCK; confirm that the front-panel controls work again.\")"
    ]
   },
   {

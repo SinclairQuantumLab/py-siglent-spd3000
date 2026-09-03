@@ -48,6 +48,17 @@ def test_output_exception_is_documented_for_users() -> None:
     assert "`psu.locked`" in readme
 
 
+def test_lock_query_capability_is_documented_as_a_runtime_check() -> None:
+    root = Path(__file__).resolve().parents[2]
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    docs = (root / "docs" / "README.md").read_text(encoding="utf-8")
+    checklist = (root / ".agents" / "HARDWARE_TESTS.md").read_text(encoding="utf-8")
+
+    assert "model-level vendor documentation" in readme
+    assert "does not define its response token" in docs
+    assert "1.01.01.03.11R1" in checklist
+
+
 def test_basic_use_shows_scpi_for_each_operation() -> None:
     readme = (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
     assert "import siglent_spd3000 as spd" in readme

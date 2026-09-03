@@ -55,7 +55,15 @@ class SocketTransport:
             try:
                 chunk = self._socket.recv(min(4096, self.max_response_bytes - len(self._buffer)))
             except TimeoutError as exc:
-                raise SPD3000TimeoutError("Timed out reading from the instrument") from exc
+                if self._buffer:
+                    detail = (
+                        f" after receiving {len(self._buffer)} byte(s) without LF termination"
+                    )
+                else:
+                    detail = " without receiving any bytes"
+                raise SPD3000TimeoutError(
+                    f"Timed out reading from the instrument{detail}"
+                ) from exc
             except OSError as exc:
                 raise SPD3000ConnectionError(f"Socket read failed: {exc}") from exc
             if not chunk:

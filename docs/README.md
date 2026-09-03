@@ -29,6 +29,9 @@ Hashes are SHA-256.
 | [PyVISA resource discovery example](<Programming Example_ List connected VISA compatible resources using PyVISA.pdf>) | 3 | 2026-09-02 | `bb8cb64f962fd6b889817b68766ca2923c1ad0bd4d2e4fa05d8862b3d7ef1265` | [SIGLENT PDF](https://siglentna.com/application-note/programming-example-list-connected-visa-compatible-resources-using-pyvisa/?pdf=7054) | VISA resource discovery and USB/TCPIP resource forms |
 | [Front-panel lock SCPI commands](<SPD Local Front Panel Lock Out SCPI commands.pdf>) | 2 | 2026-09-02 | `e9a6c72ac30ad93783400000fa4fa3202f3e23fc27e85ffc49487fb1f8622465` | [SIGLENT PDF](https://siglentna.com/operating-tip/spd-local-front-panel-lock-out-scpi-commands/?pdf=15906) | `*LOCK`, `*UNLOCK`, and model-specific `*LOCK?` support |
 
+The front-panel lock note documents the existence of `*LOCK?` on SPD3303X/X-E but does not define its response token, terminator, or transport/firmware limitations.
+Treat the package capability as documentation-derived and verify the query on each hardware configuration; the observed-device procedure is recorded in [`.agents/HARDWARE_TESTS.md`](../.agents/HARDWARE_TESTS.md).
+
 ## Live vendor pages not archived as binaries
 
 - [SPD3303X/X-E product and resource page](https://www.siglent.com/na/products-overview/spd3303x-x-e/)

@@ -106,7 +106,7 @@ class Identification:
 
 @dataclass(frozen=True)
 class Capabilities:
-    """Model-specific feature and programming-resolution information."""
+    """Documented model features and programming-resolution information."""
 
     model: Model
     voltage_resolution: float

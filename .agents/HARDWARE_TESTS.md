@@ -43,7 +43,7 @@ Record every unexpected raw response before changing the parser or API.
 - [ ] `READ-06`: After identifying an SPD3303C over USBTMC, confirm that power measurement, timer, waveform, network, and `locked` operations raise `UnsupportedFeatureError` before further device I/O and that its capabilities mark raw socket and VXI-11 unavailable.
 - [ ] `READ-07`: On SPD3303X/X-E, query `psu.ipaddr`, `psu.maskaddr`, `psu.gateaddr`, and `psu.dhcp` and compare them with the front panel network settings.
 - [ ] `READ-08`: On SPD3303X/X-E, verify that `psu.network.host`, `subnet_mask`, `gateway`, and `dhcp` return the same values as the canonical root properties.
-- [ ] `READ-09`: On SPD3303X/X-E, query `psu.locked` and compare it with actual front-panel behavior.
+- [ ] `READ-09`: On SPD3303X/X-E, attempt `psu.locked` and compare it with actual front-panel behavior; if `*LOCK?` times out while other queries remain healthy, record the firmware and connection instead of treating the documented model capability as a successful runtime probe.
 - [ ] `READ-10`: Query `psu.system.error` only after the preceding queries and require the no-error result.
 - [ ] `READ-11`: Repeat `idn`, status, setpoint, and measurement queries 100 times at the 100 ms interval and require zero malformed, truncated, stale, or timed-out responses.
 
@@ -99,10 +99,13 @@ Record every unexpected raw response before changing the parser or API.
 
 ## 8. Front-panel lock test
 
-- [ ] `LOCK-01`: On SPD3303X/X-E, call `psu.lock()`, require `psu.locked is True`, and confirm that front-panel controls are blocked.
-- [ ] `LOCK-02`: Call `psu.unlock()`, require `psu.locked is False`, and confirm that front-panel controls work again.
+- [ ] `LOCK-01`: Call `psu.lock()` and confirm that front-panel controls are blocked; on SPD3303X/X-E, additionally require `psu.locked is True` only when `*LOCK?` returned a usable response during `READ-09`.
+- [ ] `LOCK-02`: Call `psu.unlock()` and confirm that front-panel controls work again; additionally require `psu.locked is False` only when the runtime lock-state query was available.
 - [ ] `LOCK-03`: On SPD3303C, verify `lock()` and `unlock()` manually because the model does not document `*LOCK?`.
 - [ ] `LOCK-04`: Always leave the front panel unlocked.
+
+Observed on 2026-09-03: an SPD3303X running firmware `1.01.01.03.11R1` did not return an LF-terminated `*LOCK?` response before a 5-second timeout over raw TCP port 5025, while other queries in the same session succeeded.
+This is a hardware observation, not evidence that the vendor-documented command is universally unsupported.
 
 ## 9. Save and recall test
 
