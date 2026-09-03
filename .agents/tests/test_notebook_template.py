@@ -93,16 +93,36 @@ def test_notebook_demonstrates_manual_scpi_command_discovery() -> None:
     assert "print(match)" in example
 
 
-def test_notebook_demonstrates_semantic_batching_and_verified_writes() -> None:
-    notebook_text = json.dumps(_notebook())
+def test_notebook_separates_batching_basic_control_and_write_verification() -> None:
+    notebook = _notebook()
+    notebook_text = json.dumps(notebook)
+    sections = {
+        "".join(cell["source"]).splitlines()[0]: "".join(cell["source"])
+        for cell in notebook["cells"]
+        if cell["cell_type"] == "markdown"
+        and "".join(cell["source"]).startswith(("## 8.", "## 10.", "## 11."))
+    }
 
     assert "Read-only semantic and raw batches" in notebook_text
     assert "with psu.batch() as semantic_responses:" in notebook_text
     assert "batch_identity, batch_status = semantic_responses" in notebook_text
-    assert "Verified CH1/CH2 output-off write" in notebook_text
+    assert "## 10. Basic CH1 output control" in sections
+    assert "## 11. Write verification" in sections
+    basic_control_index = next(
+        index
+        for index, cell in enumerate(notebook["cells"])
+        if "".join(cell["source"]).startswith("## 10. Basic CH1 output control")
+    )
+    basic_control = "".join(notebook["cells"][basic_control_index + 1]["source"])
+    assert "psu.batch" not in basic_control
+    assert "psu.verify_writes" not in basic_control
+    assert "psu.ch1.voltage = TEST_VOLTAGE_V" in basic_control
+    assert "psu.ch1.current = TEST_CURRENT_A" in basic_control
+    assert "psu.ch1.output = TEST_OUTPUT" in basic_control
     assert "with psu.verify_writes():" in notebook_text
-    assert "automatic readback matched False" in notebook_text
-    assert "Independent query SCPI" in notebook_text
+    assert "psu.ch1.voltage = current_voltage" in notebook_text
+    assert "psu.ch1.current = current_limit" in notebook_text
+    assert "psu.ch1.output = current_output" in notebook_text
 
 
 def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
@@ -145,12 +165,11 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
     assert "if psu.capabilities.lock_query:" in notebook_text
     assert "asdict(" not in notebook_text
     assert "json.dumps" not in notebook_text
-    assert "DISABLE {TEST_CHANNEL.value}" in notebook_text
-    assert '[1/3] Query SCPI: \\"SYST:STAT?\\"' in notebook_text
-    assert '[2/3] Verified write SCPI: \\"OUTP {TEST_CHANNEL.value},OFF\\"' in notebook_text
-    assert "Output-off round trip passed; the channel remains off." in notebook_text
-    assert "TEST_VOLTAGE_V" not in notebook_text
-    assert "TEST_CURRENT_A" not in notebook_text
+    assert "TEST_VOLTAGE_V = 1.0" in notebook_text
+    assert "TEST_CURRENT_A = 0.1" in notebook_text
+    assert "TEST_OUTPUT = False" in notebook_text
+    assert "Apply this CH1 state?" in notebook_text
+    assert "CH1 voltage, current, and output writes were verified." in notebook_text
     assert "ENERGIZE_OUTPUT" not in notebook_text
     assert "RUN_CH3_OUTPUT_TEST = False" in notebook_text
     assert "RUN_TIMER_WAVEFORM_TEST = False" in notebook_text

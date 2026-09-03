@@ -281,13 +281,11 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 10. Verified CH1/CH2 output-off write\n",
+    "## 10. Basic CH1 output control\n",
     "\n",
-    "This first write test changes no voltage or current setting and never enables an output.\n",
-    "After confirmation, `psu.verify_writes()` sends one `OFF` command and automatically checks the documented `SYSTem:STATus?` readback.\n",
-    "A final independent query demonstrates that verification is not a cached result.\n",
-    "Each operation is printed before it starts so the last visible line identifies a timeout.\n",
-    "The selected channel is deliberately left off."
+    "Set the three values below for a small direct control check.\n",
+    "This cell uses ordinary channel properties only, without batching or automatic write verification.\n",
+    "It asks once before sending commands and leaves CH1 in the requested output state, so keep `TEST_OUTPUT = False` unless the output is safely connected."
    ]
   },
   {
@@ -296,43 +294,55 @@
    "metadata": {},
    "outputs": [],
    "source": [
-    "TEST_CHANNEL = spd.Channel.CH1\n",
-    "source = {spd.Channel.CH1: psu.ch1, spd.Channel.CH2: psu.ch2}[TEST_CHANNEL]\n",
+    "TEST_VOLTAGE_V = 1.0\n",
+    "TEST_CURRENT_A = 0.1\n",
+    "TEST_OUTPUT = False\n",
     "\n",
-    "print('[1/3] Query SCPI: \"SYST:STAT?\"', flush=True)\n",
-    "original_output = source.output\n",
-    "print(f\"      completed: {TEST_CHANNEL.value} output={original_output}\", flush=True)\n",
-    "\n",
-    "print(\"WARNING: the next operation sends one hardware-control command.\")\n",
-    "print(f\"Channel: {TEST_CHANNEL.value}\")\n",
-    "print(f\"Output: {original_output} -> False\")\n",
-    "print(\"The channel will remain off after this test.\")\n",
-    "confirmation = f\"DISABLE {TEST_CHANNEL.value}\"\n",
-    "approved = input(f\"Type {confirmation!r} to proceed, or press Enter to cancel: \").strip()\n",
-    "\n",
-    "if approved != confirmation:\n",
+    "print(f\"Planned CH1 state: {TEST_VOLTAGE_V} V, {TEST_CURRENT_A} A, output={TEST_OUTPUT}\")\n",
+    "if input(\"Apply this CH1 state? Type 'yes' to continue: \").strip().lower() != \"yes\":\n",
     "    print(\"Cancelled before sending any write command.\")\n",
     "else:\n",
-    "    print(\n",
-    "        f'[2/3] Verified write SCPI: \"OUTP {TEST_CHANNEL.value},OFF\"; '\n",
-    "        'automatic readback: \"SYST:STAT?\"',\n",
-    "        flush=True,\n",
-    "    )\n",
-    "    with psu.verify_writes():\n",
-    "        psu.output(TEST_CHANNEL, spd.OutputState.OFF)\n",
-    "    print(\"      completed: automatic readback matched False\", flush=True)\n",
-    "    print('[3/3] Independent query SCPI: \"SYST:STAT?\"', flush=True)\n",
-    "    observed_output = source.output\n",
-    "    print(f\"      completed: {TEST_CHANNEL.value} output={observed_output}\", flush=True)\n",
-    "    assert observed_output is False\n",
-    "    print(\"Output-off round trip passed; the channel remains off.\")"
+    "    psu.ch1.voltage = TEST_VOLTAGE_V\n",
+    "    print(f\"Voltage: {psu.ch1.voltage} V\")\n",
+    "    psu.ch1.current = TEST_CURRENT_A\n",
+    "    print(f\"Current: {psu.ch1.current} A\")\n",
+    "    psu.ch1.output = TEST_OUTPUT\n",
+    "    print(f\"Output: {psu.ch1.output}\")"
    ]
   },
   {
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 11. Optional CH3 output test\n",
+    "## 11. Write verification\n",
+    "\n",
+    "This cell reapplies the current CH1 voltage, current, and output settings without changing their logical values.\n",
+    "Inside `psu.verify_writes()`, each write is followed by its documented readback and raises `SPD3000VerificationError` if the returned value does not match."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "current_voltage = psu.ch1.voltage\n",
+    "current_limit = psu.ch1.current\n",
+    "current_output = psu.ch1.output\n",
+    "\n",
+    "with psu.verify_writes():\n",
+    "    psu.ch1.voltage = current_voltage\n",
+    "    psu.ch1.current = current_limit\n",
+    "    psu.ch1.output = current_output\n",
+    "\n",
+    "print(\"CH1 voltage, current, and output writes were verified.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 12. Optional CH3 output test\n",
     "\n",
     "CH3 has no documented remote output-state query, so this test requires physical observation and always sends `OFF` in `finally`.\n",
     "Run it only with CH3 unloaded or connected to a correctly rated verification instrument."
@@ -364,7 +374,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 12. Optional timer and waveform configuration round trip\n",
+    "## 13. Optional timer and waveform configuration round trip\n",
     "\n",
     "This test is available only on SPD3303X/X-E, overwrites one timer group and toggles one waveform-display state after confirmation, verifies both, and restores their original values in `finally`.\n",
     "It deliberately does not start the timer or energize an output."
@@ -377,6 +387,7 @@
    "outputs": [],
    "source": [
     "RUN_TIMER_WAVEFORM_TEST = False\n",
+    "TIMER_CHANNEL = spd.Channel.CH1\n",
     "TIMER_GROUP = 5\n",
     "TIMER_STEP = {\"voltage_v\": 1.0, \"current_a\": 0.1, \"duration_s\": 1.0}\n",
     "if not psu.capabilities.timer:\n",
@@ -384,9 +395,9 @@
     "elif not RUN_TIMER_WAVEFORM_TEST:\n",
     "    print(\"Skipped; set RUN_TIMER_WAVEFORM_TEST = True to prepare this test\")\n",
     "else:\n",
-    "    original_timer_step = psu.timer.set(TEST_CHANNEL, TIMER_GROUP)\n",
+    "    original_timer_step = psu.timer.set(TIMER_CHANNEL, TIMER_GROUP)\n",
     "    timer_status = psu.system.status\n",
-    "    channel_status = timer_status.ch1 if TEST_CHANNEL is spd.Channel.CH1 else timer_status.ch2\n",
+    "    channel_status = timer_status.ch1 if TIMER_CHANNEL is spd.Channel.CH1 else timer_status.ch2\n",
     "    original_waveform = channel_status.waveform\n",
     "    pprint(\n",
     "        {\n",
@@ -396,17 +407,17 @@
     "        },\n",
     "        sort_dicts=False,\n",
     "    )\n",
-    "    phrase = f\"OVERWRITE TIMER {TEST_CHANNEL.value} {TIMER_GROUP}\"\n",
+    "    phrase = f\"OVERWRITE TIMER {TIMER_CHANNEL.value} {TIMER_GROUP}\"\n",
     "    if input(f\"Type {phrase!r} to proceed: \").strip() != phrase:\n",
     "        print(\"Cancelled before writing the timer group.\")\n",
     "    else:\n",
     "        try:\n",
     "            with psu.batch(), psu.verify_writes():\n",
-    "                psu.timer.set(TEST_CHANNEL, TIMER_GROUP, **TIMER_STEP)\n",
+    "                psu.timer.set(TIMER_CHANNEL, TIMER_GROUP, **TIMER_STEP)\n",
     "                if original_waveform is not None:\n",
     "                    changed_waveform = not original_waveform\n",
     "                    psu.output.wave(\n",
-    "                        TEST_CHANNEL,\n",
+    "                        TIMER_CHANNEL,\n",
     "                        spd.WaveformState.ON if changed_waveform else spd.WaveformState.OFF,\n",
     "                    )\n",
     "            print(\"Timer and waveform configuration round trip passed.\")\n",
@@ -414,10 +425,10 @@
     "            with psu.batch():\n",
     "                if original_waveform is not None:\n",
     "                    psu.output.wave(\n",
-    "                        TEST_CHANNEL,\n",
+    "                        TIMER_CHANNEL,\n",
     "                        spd.WaveformState.ON if original_waveform else spd.WaveformState.OFF,\n",
     "                    )\n",
-    "                psu.timer.set(TEST_CHANNEL, TIMER_GROUP, **original_timer_step)\n",
+    "                psu.timer.set(TIMER_CHANNEL, TIMER_GROUP, **original_timer_step)\n",
     "            print(\"Restored the original timer group and waveform-display state.\")"
    ]
   },
@@ -425,7 +436,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 13. Optional front-panel lock round trip\n",
+    "## 14. Optional front-panel lock round trip\n",
     "\n",
     "This test locks the front panel only after confirmation and always sends `*UNLOCK` in `finally`.\n",
     "Programmatic state assertions run only if `*LOCK?` returned a usable response in the earlier read-only check; otherwise confirm both operations physically at the front panel."
@@ -463,7 +474,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 14. Tests intentionally left to the acceptance checklist\n",
+    "## 15. Tests intentionally left to the acceptance checklist\n",
     "\n",
     "Tracking modes require verified series or parallel wiring, save/recall overwrites persistent setup memory, network writes can disconnect the instrument, invalid raw commands deliberately alter the error queue, and forced link failures require external intervention.\n",
     "Run those cases manually from [`.agents/HARDWARE_TESTS.md`](.agents/HARDWARE_TESTS.md) rather than turning them into casual notebook cells."
@@ -473,7 +484,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 15. Close the connection\n",
+    "## 16. Close the connection\n",
     "\n",
     "Run this final cell even after read-only testing so another process can immediately acquire the instrument."
    ]
