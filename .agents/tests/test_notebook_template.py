@@ -93,7 +93,7 @@ def test_notebook_demonstrates_manual_scpi_command_discovery() -> None:
     assert "print(match)" in example
 
 
-def test_notebook_separates_batching_basic_control_and_write_verification() -> None:
+def test_notebook_orders_control_verification_batching_and_diagnostics() -> None:
     notebook = _notebook()
     notebook_text = json.dumps(notebook)
     headings = [
@@ -108,21 +108,22 @@ def test_notebook_separates_batching_basic_control_and_write_verification() -> N
         and "".join(cell["source"]).startswith(("## 6.", "## 7.", "## 8."))
     }
 
-    assert headings[4:11] == [
+    assert headings[4:12] == [
         "## 5. CH1 and CH2 read-only checks",
         "## 6. Basic CH1 output control",
-        "## 7. Read-only semantic and raw batches",
-        "## 8. Write verification",
+        "## 7. Write verification",
+        "## 8. Batch",
         "## 9. Repeated-query stability",
         "## 10. Model-specific read-only checks",
-        "## 11. Optional error-queue read",
+        "## 11. Read-only semantic and raw batches",
+        "## 12. Optional error-queue read",
     ]
     assert "Read-only semantic and raw batches" in notebook_text
     assert "with psu.batch() as semantic_responses:" in notebook_text
     assert "batch_identity, batch_status = semantic_responses" in notebook_text
     assert "## 6. Basic CH1 output control" in sections
-    assert "## 7. Read-only semantic and raw batches" in sections
-    assert "## 8. Write verification" in sections
+    assert "## 7. Write verification" in sections
+    assert "## 8. Batch" in sections
     basic_control_index = next(
         index
         for index, cell in enumerate(notebook["cells"])
@@ -134,12 +135,27 @@ def test_notebook_separates_batching_basic_control_and_write_verification() -> N
     assert basic_control == (
         "psu.ch1.voltage = 1.0\n"
         "psu.ch1.current = 0.1\n"
-        "psu.ch1.output = True"
+        "psu.ch1.output = True\n"
+        "\n"
+        'print(f"CH1 set voltage: {psu.ch1.voltage} V, current: {psu.ch1.current} A, '
+        'output: {psu.ch1.output}")'
     )
     assert "with psu.verify_writes():" in notebook_text
     assert "psu.ch1.voltage = current_voltage" in notebook_text
     assert "psu.ch1.current = current_limit" in notebook_text
     assert "psu.ch1.output = current_output" in notebook_text
+    batch_syntax_index = next(
+        index
+        for index, cell in enumerate(notebook["cells"])
+        if "".join(cell["source"]).startswith("## 8. Batch")
+    )
+    batch_syntax = "".join(notebook["cells"][batch_syntax_index + 1]["source"])
+    assert batch_syntax == (
+        "with psu.batch():\n"
+        "    psu.ch1.voltage = 1.0\n"
+        "    psu.ch1.current = 0.1\n"
+        "    psu.ch1.output = True"
+    )
 
 
 def test_notebook_exercises_public_driver_paths_with_safety_guidance() -> None:
@@ -168,7 +184,7 @@ def test_notebook_exercises_public_driver_paths_with_safety_guidance() -> None:
     assert "from decimal import Decimal" not in notebook_text
     assert "from dataclasses import asdict" not in notebook_text
     assert "from pprint import pprint" in notebook_text
-    assert "print(identity)" in notebook_text
+    assert "print(psu.idn); print()" in notebook_text
     assert "print(psu.capabilities)" in notebook_text
     assert "print(psu.settings)" in notebook_text
     assert "print(status)" in notebook_text

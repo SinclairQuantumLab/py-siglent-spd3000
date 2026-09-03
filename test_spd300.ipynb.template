@@ -9,9 +9,16 @@
     "Copy this file to `test_spd300.ipynb`, select the Python environment containing this checkout, and run the cells in order.\n",
     "The notebook imports the installed `siglent_spd3000` package, so its results exercise the actual driver implementation rather than a duplicate test script.\n",
     "Read-only cells come first, followed by direct hardware-control tests.\n",
-    "Run this notebook only with the power supply isolated from sensitive hardware and connected only to a correctly rated dummy load or measurement instrument, so unexpected voltage, current, or output settings cannot damage anything.\n",
-    "Keep the front panel accessible, and stop immediately if an output cannot be disabled.\n",
     "The complete acceptance procedure remains in [`.agents/HARDWARE_TESTS.md`](.agents/HARDWARE_TESTS.md)."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "**Run this notebook only with the power supply isolated from sensitive hardware and connected only to a correctly rated dummy load or measurement instrument, so unexpected voltage, current, or output settings cannot damage anything.**\n",
+    "\n",
+    "**Keep the front panel accessible, and stop immediately if an output cannot be disabled.**"
    ]
   },
   {
@@ -75,10 +82,12 @@
    "metadata": {},
    "outputs": [],
    "source": [
+    "\n",
     "identity = psu.idn\n",
-    "print(identity)\n",
-    "print(psu.capabilities)\n",
-    "print(psu.settings)\n",
+    "print(psu.idn); print()\n",
+    "print(psu.capabilities); print()\n",
+    "print(psu.settings); print()\n",
+    "\n",
     "assert identity.model is psu.model\n",
     "assert identity.raw == psu.scpi.query(\"*IDN?\")"
    ]
@@ -178,45 +187,16 @@
    "source": [
     "psu.ch1.voltage = 1.0\n",
     "psu.ch1.current = 0.1\n",
-    "psu.ch1.output = True"
+    "psu.ch1.output = True\n",
+    "\n",
+    "print(f\"CH1 set voltage: {psu.ch1.voltage} V, current: {psu.ch1.current} A, output: {psu.ch1.output}\")"
    ]
   },
   {
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 7. Read-only semantic and raw batches\n",
-    "\n",
-    "The semantic batch returns ordinary parsed Python objects, while the raw batch returns SCPI strings aligned with its commands.\n",
-    "Both paths submit their two queries as one non-interleaved batch, which is especially important when the gateway is serving multiple clients."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "with psu.batch() as semantic_responses:\n",
-    "    _ = psu.idn\n",
-    "    _ = psu.system.status\n",
-    "\n",
-    "batch_identity, batch_status = semantic_responses\n",
-    "print(batch_identity)\n",
-    "print(batch_status)\n",
-    "assert batch_identity.model is psu.model\n",
-    "\n",
-    "raw_batch = psu.scpi.execute([spd.Query(\"*IDN?\"), spd.Query(\"SYST:STAT?\")])\n",
-    "print(raw_batch.values)\n",
-    "assert len(raw_batch.values) == 2\n",
-    "assert all(isinstance(value, str) for value in raw_batch.values)"
-   ]
-  },
-  {
-   "cell_type": "markdown",
-   "metadata": {},
-   "source": [
-    "## 8. Write verification\n",
+    "## 7. Write verification\n",
     "\n",
     "This cell reapplies the current CH1 voltage, current, and output settings without changing their logical values.\n",
     "Inside `psu.verify_writes()`, each write is followed by its documented readback and raises `SPD3000VerificationError` if the returned value does not match."
@@ -238,6 +218,27 @@
     "    psu.ch1.output = current_output\n",
     "\n",
     "print(\"CH1 voltage, current, and output writes were verified.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 8. Batch\n",
+    "\n",
+    "Wrap ordinary driver operations in `with psu.batch():` to send them as one non-interleaved batch."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "with psu.batch():\n",
+    "    psu.ch1.voltage = 1.0\n",
+    "    psu.ch1.current = 0.1\n",
+    "    psu.ch1.output = True"
    ]
   },
   {
@@ -308,7 +309,38 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 11. Optional error-queue read\n",
+    "## 11. Read-only semantic and raw batches\n",
+    "\n",
+    "The semantic batch returns ordinary parsed Python objects, while the raw batch returns SCPI strings aligned with its commands.\n",
+    "Both paths submit their two queries as one non-interleaved batch, which is especially important when the gateway is serving multiple clients."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "with psu.batch() as semantic_responses:\n",
+    "    _ = psu.idn\n",
+    "    _ = psu.system.status\n",
+    "\n",
+    "batch_identity, batch_status = semantic_responses\n",
+    "print(batch_identity)\n",
+    "print(batch_status)\n",
+    "assert batch_identity.model is psu.model\n",
+    "\n",
+    "raw_batch = psu.scpi.execute([spd.Query(\"*IDN?\"), spd.Query(\"SYST:STAT?\")])\n",
+    "print(raw_batch.values)\n",
+    "assert len(raw_batch.values) == 2\n",
+    "assert all(isinstance(value, str) for value in raw_batch.values)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 12. Optional error-queue read\n",
     "\n",
     "Reading `psu.system.error` removes one entry from the instrument error queue, so this diagnostic is opt-in even though it sends no write command."
    ]
@@ -330,7 +362,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 12. Optional CH3 output test\n",
+    "## 13. Optional CH3 output test\n",
     "\n",
     "CH3 has no documented remote output-state query, so this test requires physical observation and always sends `OFF` in `finally`.\n",
     "Run it only with CH3 unloaded or connected to a correctly rated verification instrument."
@@ -362,7 +394,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 13. Optional timer and waveform configuration round trip\n",
+    "## 14. Optional timer and waveform configuration round trip\n",
     "\n",
     "This test is available only on SPD3303X/X-E, overwrites one timer group and toggles one waveform-display state after confirmation, verifies both, and restores their original values in `finally`.\n",
     "It deliberately does not start the timer or energize an output."
@@ -424,7 +456,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 14. Optional front-panel lock round trip\n",
+    "## 15. Optional front-panel lock round trip\n",
     "\n",
     "This test locks the front panel only after confirmation and always sends `*UNLOCK` in `finally`.\n",
     "Programmatic state assertions run only if `*LOCK?` returned a usable response in the earlier read-only check; otherwise confirm both operations physically at the front panel."
@@ -462,7 +494,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 15. Tests intentionally left to the acceptance checklist\n",
+    "## 16. Tests intentionally left to the acceptance checklist\n",
     "\n",
     "Tracking modes require verified series or parallel wiring, save/recall overwrites persistent setup memory, network writes can disconnect the instrument, invalid raw commands deliberately alter the error queue, and forced link failures require external intervention.\n",
     "Run those cases manually from [`.agents/HARDWARE_TESTS.md`](.agents/HARDWARE_TESTS.md) rather than turning them into casual notebook cells."
@@ -472,7 +504,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 16. Close the connection\n",
+    "## 17. Close the connection\n",
     "\n",
     "Run this final cell even after read-only testing so another process can immediately acquire the instrument."
    ]
