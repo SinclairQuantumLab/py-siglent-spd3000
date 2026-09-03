@@ -96,22 +96,37 @@ def test_notebook_demonstrates_manual_scpi_command_discovery() -> None:
 def test_notebook_separates_batching_basic_control_and_write_verification() -> None:
     notebook = _notebook()
     notebook_text = json.dumps(notebook)
+    headings = [
+        "".join(cell["source"]).splitlines()[0]
+        for cell in notebook["cells"]
+        if cell["cell_type"] == "markdown" and "".join(cell["source"]).startswith("## ")
+    ]
     sections = {
         "".join(cell["source"]).splitlines()[0]: "".join(cell["source"])
         for cell in notebook["cells"]
         if cell["cell_type"] == "markdown"
-        and "".join(cell["source"]).startswith(("## 8.", "## 10.", "## 11."))
+        and "".join(cell["source"]).startswith(("## 6.", "## 7.", "## 8."))
     }
 
+    assert headings[4:11] == [
+        "## 5. CH1 and CH2 read-only checks",
+        "## 6. Basic CH1 output control",
+        "## 7. Read-only semantic and raw batches",
+        "## 8. Write verification",
+        "## 9. Repeated-query stability",
+        "## 10. Model-specific read-only checks",
+        "## 11. Optional error-queue read",
+    ]
     assert "Read-only semantic and raw batches" in notebook_text
     assert "with psu.batch() as semantic_responses:" in notebook_text
     assert "batch_identity, batch_status = semantic_responses" in notebook_text
-    assert "## 10. Basic CH1 output control" in sections
-    assert "## 11. Write verification" in sections
+    assert "## 6. Basic CH1 output control" in sections
+    assert "## 7. Read-only semantic and raw batches" in sections
+    assert "## 8. Write verification" in sections
     basic_control_index = next(
         index
         for index, cell in enumerate(notebook["cells"])
-        if "".join(cell["source"]).startswith("## 10. Basic CH1 output control")
+        if "".join(cell["source"]).startswith("## 6. Basic CH1 output control")
     )
     basic_control = "".join(notebook["cells"][basic_control_index + 1]["source"])
     assert "psu.batch" not in basic_control
