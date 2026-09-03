@@ -27,6 +27,10 @@ class SPD3000ValidationError(SPD3000Error, ValueError):
     """A value is invalid for the selected SPD3000 model."""
 
 
+class SPD3000DeferredResultError(SPD3000Error, RuntimeError):
+    """A deferred batch query result is pending or was cancelled."""
+
+
 class SPD3000VerificationError(SPD3000Error):
     """A write completed but its requested readback could not verify the result."""
 
@@ -95,6 +99,7 @@ CANONICAL_EXCEPTION_TYPES: dict[str, type[SPD3000Error]] = {
         SPD3000ProtocolError,
         SPD3000CommandError,
         SPD3000ValidationError,
+        SPD3000DeferredResultError,
         SPD3000VerificationError,
         UnsupportedFeatureError,
         UnknownModelError,

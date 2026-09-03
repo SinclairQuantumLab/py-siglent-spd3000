@@ -160,6 +160,10 @@ def test_batching_and_verification_are_documented_as_separate_contexts() -> None
     assert "with psu.batch:" in guide
     assert "with psu.verify:" in guide
     assert "with psu.batch, psu.verify:" in guide
+    assert "Deferred[T]" in guide
+    assert "voltage.value" in guide
+    assert "SPD3000DeferredResultError" in guide
+    assert "Raw `psu.scpi.query()` also returns a Deferred" in guide
     assert "SPD3000VerificationError" in guide
     assert "never imply rollback" in guide
     assert "applied first and then reported as unverifiable" in guide

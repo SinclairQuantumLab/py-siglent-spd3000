@@ -8,16 +8,20 @@ import time
 import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Generic, Protocol, TypeVar, cast
 
 from .exceptions import (
     SPD3000ConnectionError,
+    SPD3000DeferredResultError,
     SPD3000Error,
     SPD3000ProtocolError,
     SPD3000TimeoutError,
     SPD3000TimingWarning,
     SPD3000ValidationError,
 )
+
+_T = TypeVar("_T")
+_PENDING = object()
 
 
 def _validated_command(text: str) -> str:
@@ -72,6 +76,64 @@ class BatchResult:
     """Results aligned with a command batch; writes produce ``None``."""
 
     values: tuple[str | None, ...]
+
+
+class Deferred(Generic[_T]):
+    """A typed query result populated when its collecting batch exits.
+
+    Accessing :attr:`value` before successful batch completion raises
+    :class:`SPD3000DeferredResultError`. Query or parsing failures are retained
+    and re-raised if the result is inspected after the context exception was
+    caught.
+    """
+
+    def __init__(self, command: str) -> None:
+        self.command = command
+        self._value: object = _PENDING
+        self._error: BaseException | None = None
+
+    @property
+    def done(self) -> bool:
+        """Whether the batch has resolved, failed, or cancelled this result."""
+
+        return self._value is not _PENDING or self._error is not None
+
+    @property
+    def value(self) -> _T:
+        """Return the resolved value or raise its pending/stored error."""
+
+        if self._error is not None:
+            raise self._error
+        if self._value is _PENDING:
+            raise SPD3000DeferredResultError(
+                f"Query {self.command!r} is pending until the psu.batch context exits"
+            )
+        return cast(_T, self._value)
+
+    def result(self) -> _T:
+        """Method-form alias for :attr:`value`."""
+
+        return self.value
+
+    def _resolve(self, value: _T) -> None:
+        self._value = value
+
+    def _reject(self, error: BaseException) -> None:
+        self._error = error
+
+    def _cancel(self) -> None:
+        self._error = SPD3000DeferredResultError(
+            f"Query {self.command!r} was cancelled because the psu.batch body did not complete"
+        )
+
+    def __repr__(self) -> str:
+        if self._error is not None:
+            state = f"failed={type(self._error).__name__}"
+        elif self._value is _PENDING:
+            state = "pending"
+        else:
+            state = f"value={self._value!r}"
+        return f"Deferred(command={self.command!r}, {state})"
 
 
 @dataclass(frozen=True, init=False)

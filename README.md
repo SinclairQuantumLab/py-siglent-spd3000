@@ -114,7 +114,7 @@ with spd.SPD3000.connect("socket", "192.168.1.50") as psu:
 ```
 
 See [From a manual SCPI command to Python](#from-a-manual-scpi-command-to-python) to find and use the commands and corresponding library methods.
-See [Batching and verification](#batching-and-verification) when several semantic writes must not interleave or their resulting state must be read back automatically.
+See [Batching and verification](#batching-and-verification) when several operations must execute without interleaving or their resulting state must be read back automatically.
 Every instrument-state property read performs a fresh hardware query; output state and measurements are never answered from a write cache.
 `str(psu)` instead summarizes the identity cached during connection, the normalized connection destination, and whether the local driver session is open without issuing another command.
 The reported `open` state means that `close()` has not been called; it is not an active reachability probe.
@@ -354,18 +354,24 @@ Use `lookup_command("MEAS:VOLT?")` to discover the corresponding Python path, or
 ## Batching and verification
 
 Ordinary setters execute immediately and do not perform an implicit readback.
-Use `psu.batch` to collect semantic write operations and submit them as one non-interleaved command batch:
+Use `psu.batch` to collect semantic writes and queries and submit them as one non-interleaved command batch:
 
 ```python
 with psu.batch:
     psu.ch1.voltage = 5.0
     psu.ch1.current = 0.5
-    psu.ch1.output = True
+    voltage = psu.ch1.voltage
+    measured = psu.measure.voltage(spd.Channel.CH1)
+
+print(voltage.value)
+print(measured.value)
 ```
 
 The block above sends nothing until normal block exit.
-If the Python block raises an exception, its collected writes are discarded without being sent.
-Property reads and other queries cannot return deferred values and therefore raise `SPD3000ValidationError` inside `psu.batch`.
+Each query made inside the block returns a `Deferred[T]`, which is populated with its ordinary parsed Python value when the block exits successfully.
+Accessing `.value` or `.result()` before block exit raises `SPD3000DeferredResultError` because the query has not been sent yet.
+If the Python block raises an exception, all collected operations are discarded without being sent and its Deferred results become cancelled.
+An execution or response-parsing failure is raised when the block exits and is retained by the affected Deferred result.
 
 Use `psu.verify` when each semantic write must be followed by its documented readback and checked against the requested value:
 
@@ -399,7 +405,8 @@ except spd.SPD3000VerificationError as exc:
 
 Verification errors never imply rollback.
 In particular, an unqueryable setting such as CH3 output is applied first and then reported as unverifiable, and writes completed before a later batch failure may remain applied.
-The raw `psu.scpi.execute()` escape hatch cannot be nested inside either semantic context because the driver cannot infer its expected results.
+Raw `psu.scpi.query()` also returns a Deferred inside `psu.batch`.
+The already-assembled `psu.scpi.execute()` escape hatch cannot be nested inside either semantic context because it owns a separate immediate batch.
 
 ## Timing
 
