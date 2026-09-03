@@ -90,6 +90,9 @@ def test_distributed_gateway_templates_match_repository_copies() -> None:
     )
     assert "# port = 8765 # default value" in settings_template
     assert "\nport = 8765" not in settings_template
+    assert 'connection = "<TYPE>"' in settings_template
+    assert 'identifier = "<IDENTIFIER>"' in settings_template
+    assert "instrument IP/hostname or complete VISA resource" in settings_template
     auth_template = (root / "gateway-auth.toml.template").read_text(encoding="utf-8")
     assert "[auth]" not in auth_template
     assert "Any non-empty custom string is a valid token" in auth_template

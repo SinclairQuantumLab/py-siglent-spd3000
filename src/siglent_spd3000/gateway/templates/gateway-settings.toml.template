@@ -7,14 +7,13 @@ bind = "localhost"
 # port = 8765 # default value
 
 [instrument]
-# Supported values are "socket", "vxi11", and "visa".
-connection = "socket"
-identifier = "192.168.50.30"
+connection = "<TYPE>" # e.g., "socket", "vxi11", or "visa"
+identifier = "<IDENTIFIER>" # e.g., instrument IP/hostname or complete VISA resource
 
 # These defaults follow the driver and Siglent's command-spacing recommendation.
 timeout_s = 5.0
 min_command_interval_ms = 100.0
 
-# For a VISA connection, replace connection and identifier and optionally select a backend.
+# For a VISA connection, optionally select a backend.
 # identifier = "USB0::0x0483::0x7540::<SERIAL_NUMBER>::INSTR"
 # visa_backend = "@py"
