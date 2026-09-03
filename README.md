@@ -503,7 +503,7 @@ For a typical network-connected SPD3303X/X-E, use settings like these:
 ```toml
 [gateway]
 bind = "192.168.50.20" # IP address of the computer that runs this gateway server
-port = 8765
+# port = 8765 # default value
 
 [instrument]
 connection = "socket"
@@ -512,6 +512,7 @@ timeout_s = 5.0
 min_command_interval_ms = 100.0
 ```
 
+Leave `gateway.port` omitted or commented out to use the default TCP port 8765.
 `connection = "socket"` uses the documented Siglent raw-SCPI port 5025, and the official network commands provide no port-setting operation, so it is intentionally fixed inside the driver rather than exposed in this file.
 Use `connection = "vxi11"` with the instrument hostname for VXI-11, or `connection = "visa"` with a VISA resource in `identifier` for USBTMC and SPD3303C.
 

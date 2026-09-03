@@ -71,6 +71,7 @@ def test_gateway_settings_apply_safe_defaults(tmp_path: Path) -> None:
 
     settings = config.load_gateway_settings(source)
 
+    assert DEFAULT_GATEWAY_PORT == 8765
     assert settings.bind == "localhost"
     assert settings.port == DEFAULT_GATEWAY_PORT
     assert settings.instrument.connection is ConnectionType.VXI11
@@ -84,6 +85,11 @@ def test_distributed_gateway_templates_match_repository_copies() -> None:
     packaged = root / "src" / "siglent_spd3000" / "gateway" / "templates"
     for name in config.GATEWAY_TEMPLATE_NAMES:
         assert (packaged / name).read_bytes() == (root / name).read_bytes()
+    settings_template = (root / "gateway-settings.toml.template").read_text(
+        encoding="utf-8"
+    )
+    assert "# port = 8765 # default value" in settings_template
+    assert "\nport = 8765" not in settings_template
     auth_template = (root / "gateway-auth.toml.template").read_text(encoding="utf-8")
     assert "[auth]" not in auth_template
     assert "Any non-empty custom string is a valid token" in auth_template

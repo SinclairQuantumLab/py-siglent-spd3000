@@ -127,6 +127,8 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert 'token = "replace-this-example-with-the-generated-private-token"' in readme
     assert "any non-empty custom string is valid" in readme
     assert "only an example and is not required" in readme
+    assert "# port = 8765 # default value" in readme
+    assert "omitted or commented out to use the default TCP port 8765" in readme
     assert "TCP port 8765" in readme
     assert "TCP 5025" in readme
     assert "connection=spd.ConnectionType.GATEWAY" in readme

@@ -4,7 +4,7 @@
 # Use "localhost" when clients run only on this computer.
 # For remote clients, use this computer's LAN address.
 bind = "localhost"
-port = 8765
+# port = 8765 # default value
 
 [instrument]
 # Supported values are "socket", "vxi11", and "visa".
