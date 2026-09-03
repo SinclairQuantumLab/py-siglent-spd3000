@@ -19,7 +19,9 @@ def test_hardware_notebook_template_is_clean_and_well_formed() -> None:
         assert cell["cell_type"] in {"markdown", "code"}
         assert cell["source"]
         if cell["cell_type"] == "code":
-            assert index > 0 and notebook["cells"][index - 1]["cell_type"] == "markdown"
+            assert index > 0
+            if notebook["cells"][index - 1]["cell_type"] != "code":
+                assert notebook["cells"][index - 1]["cell_type"] == "markdown"
             assert cell["execution_count"] is None
             assert cell["outputs"] == []
             source = "".join(cell["source"]).replace(
@@ -136,6 +138,15 @@ def test_notebook_orders_control_verification_batching_and_diagnostics() -> None
         "psu.ch1.voltage = 1.0\n"
         "psu.ch1.current = 0.1\n"
         "psu.ch1.output = True\n"
+        "\n"
+        'print(f"CH1 set voltage: {psu.ch1.voltage} V, current: {psu.ch1.current} A, '
+        'output: {psu.ch1.output}")'
+    )
+    output_off = "".join(notebook["cells"][basic_control_index + 2]["source"])
+    assert output_off == (
+        "psu.ch1.voltage = 0\n"
+        "psu.ch1.current = 0\n"
+        "psu.ch1.output = False\n"
         "\n"
         'print(f"CH1 set voltage: {psu.ch1.voltage} V, current: {psu.ch1.current} A, '
         'output: {psu.ch1.output}")'

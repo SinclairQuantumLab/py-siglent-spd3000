@@ -193,6 +193,19 @@
    ]
   },
   {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "psu.ch1.voltage = 0\n",
+    "psu.ch1.current = 0\n",
+    "psu.ch1.output = False\n",
+    "\n",
+    "print(f\"CH1 set voltage: {psu.ch1.voltage} V, current: {psu.ch1.current} A, output: {psu.ch1.output}\")"
+   ]
+  },
+  {
    "cell_type": "markdown",
    "metadata": {},
    "source": [
