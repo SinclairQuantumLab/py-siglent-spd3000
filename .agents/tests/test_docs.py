@@ -167,7 +167,8 @@ def test_batching_and_write_verification_have_separate_device_motivated_sections
     assert "with psu.batch():" in batching
     assert "with psu.batch() as responses:" in batching
     assert "voltage, measured_current = responses" in batching
-    assert 'print(values["voltage"])  # float' in batching
+    assert "ch1_set_voltage, ch1_measured_voltage = configure_and_read()" in batching
+    assert "print(ch1_set_voltage)  # float" in batching
     assert "automatic verification readbacks are omitted" in batching
     assert "Raw `psu.scpi.query()` can also be collected" in batching
 

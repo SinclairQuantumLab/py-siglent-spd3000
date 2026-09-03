@@ -390,14 +390,11 @@ Execution and response-parsing failures are raised when the block exits.
 @psu.batch
 def configure_and_read():
     psu.ch1.voltage = 5.0
-    return {
-        "voltage": psu.ch1.voltage,
-        "measured": psu.measure.voltage(spd.Channel.CH1),
-    }
+    return psu.ch1.voltage, psu.measure.voltage(spd.Channel.CH1)
 
-values = configure_and_read()
-print(values["voltage"])  # float
-print(values["measured"])  # float
+ch1_set_voltage, ch1_measured_voltage = configure_and_read()
+print(ch1_set_voltage)  # float
+print(ch1_measured_voltage)  # float
 ```
 
 Batching guarantees ordering and non-interleaving, not rollback: writes completed before a later command fails may remain applied.
