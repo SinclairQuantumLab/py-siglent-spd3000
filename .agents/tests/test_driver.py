@@ -5,6 +5,7 @@ import pytest
 import siglent_spd3000 as spd
 from siglent_spd3000 import (
     SPD3000,
+    BatchResponses,
     Channel,
     ConnectionType,
     Deferred,
@@ -38,9 +39,13 @@ def test_connect_dispatches_and_converts_milliseconds(
         host: str,
         *,
         settings: object,
-        verify_write: bool,
+        verify_writes_globally: bool,
     ) -> object:
-        captured.update(host=host, settings=settings, verify_write=verify_write)
+        captured.update(
+            host=host,
+            settings=settings,
+            verify_writes_globally=verify_writes_globally,
+        )
         return sentinel
 
     monkeypatch.setattr(SPD3000, "_connect_socket", classmethod(fake_connect_socket))
@@ -51,7 +56,7 @@ def test_connect_dispatches_and_converts_milliseconds(
             identifier=" 192.168.1.50 ",
             timeout_s=7.0,
             min_command_interval_ms=5,
-            verify_write=True,
+            verify_writes_globally=True,
         )
 
     assert result is sentinel
@@ -60,7 +65,7 @@ def test_connect_dispatches_and_converts_milliseconds(
     assert isinstance(settings, ExecutionSettings)
     assert settings.timeout == 7.0
     assert settings.min_command_interval == 0.005
-    assert captured["verify_write"] is True
+    assert captured["verify_writes_globally"] is True
     assert caught[0].filename == __file__
 
 
@@ -74,8 +79,14 @@ def test_connect_rejects_unknown_method_and_method_specific_options() -> None:
     with pytest.raises(TypeError, match="unexpected keyword argument 'port'"):
         SPD3000.connect(ConnectionType.SOCKET, "192.168.1.50", port=5025)  # type: ignore[call-arg]
 
-    with pytest.raises(SPD3000ValidationError, match="verify_write must be a bool"):
-        SPD3000.connect(ConnectionType.SOCKET, "192.168.1.50", verify_write=1)  # type: ignore[arg-type]
+    with pytest.raises(
+        SPD3000ValidationError, match="verify_writes_globally must be a bool"
+    ):
+        SPD3000.connect(
+            ConnectionType.SOCKET,
+            "192.168.1.50",
+            verify_writes_globally=1,  # type: ignore[arg-type]
+        )
 
 
 def test_connect_dispatches_every_supported_connection_type(
@@ -110,7 +121,7 @@ def test_connect_dispatches_every_supported_connection_type(
     assert calls[3][2]["port"] == 9876
     assert calls[3][2]["token"] == "secret"
     assert all(isinstance(kwargs["settings"], ExecutionSettings) for _, _, kwargs in calls)
-    assert all(kwargs["verify_write"] is False for _, _, kwargs in calls)
+    assert all(kwargs["verify_writes_globally"] is False for _, _, kwargs in calls)
 
 
 @pytest.mark.parametrize(
@@ -488,17 +499,47 @@ def test_context_manager_closes_executor() -> None:
     assert executor.closed is True
 
 
-def test_batch_write_collects_semantic_writes_and_executes_once_on_exit() -> None:
+def test_batch_context_collects_semantic_writes_and_executes_once_on_exit() -> None:
     executor = FakeExecutor(responses_for("SPD3303X"))
     psu = SPD3000(executor)
 
-    with psu.batch_write:
+    with psu.batch() as responses:
         psu.ch1.voltage = 5.0
         psu.ch1.current = 0.5
         psu.ch1.output = True
         assert executor.commands == ["*IDN?"]
+        assert responses.done is False
+        with pytest.raises(SPD3000DeferredResultError, match="pending"):
+            _ = responses[:]
 
     assert executor.batches[-1] == ["CH1:VOLT 5", "CH1:CURR 0.5", "OUTP CH1,ON"]
+    assert responses.done is True
+    assert responses[:] == ()
+
+
+def test_batch_context_returns_parsed_user_queries_in_source_order() -> None:
+    executor = FakeExecutor(
+        responses_for(
+            "SPD3303X",
+            **{
+                "CH1:VOLT?": ["5"],
+                "MEAS:CURR? CH1": ["0.125"],
+                "SYST:STAT?": ["0x10"],
+            },
+        )
+    )
+    psu = SPD3000(executor)
+
+    with psu.batch() as responses:
+        _ = psu.ch1.voltage
+        _ = psu.measure.current(Channel.CH1)
+        _ = psu.ch1.output
+
+    assert isinstance(responses, BatchResponses)
+    assert repr(responses) == "BatchResponses(values=(5.0, 0.125, True))"
+    assert responses.values == (5.0, 0.125, True)
+    voltage, current, output = responses
+    assert (voltage, current, output) == (5.0, 0.125, True)
 
 
 def test_batch_discards_pending_operations_when_body_raises() -> None:
@@ -522,6 +563,20 @@ def test_batch_discards_pending_operations_when_body_raises() -> None:
     assert captured[0].done is True
     with pytest.raises(SPD3000DeferredResultError, match="cancelled"):
         _ = captured[0].value
+
+
+def test_batch_context_cancels_responses_when_body_raises() -> None:
+    executor = FakeExecutor(responses_for("SPD3303X", **{"CH1:VOLT?": ["5"]}))
+    psu = SPD3000(executor)
+
+    with pytest.raises(RuntimeError, match="stop"), psu.batch() as responses:
+        _ = psu.ch1.voltage
+        raise RuntimeError("stop")
+
+    assert executor.commands == ["*IDN?"]
+    assert responses.done is True
+    with pytest.raises(SPD3000DeferredResultError, match="cancelled"):
+        _ = responses.values
 
 
 def test_batch_decorator_executes_mixed_operations_and_unwraps_return_value() -> None:
@@ -564,7 +619,7 @@ def test_batch_decorator_executes_mixed_operations_and_unwraps_return_value() ->
     assert returned == {"voltage": 5.0, "nested": [0.125, (True, "0x10")]}
 
 
-def test_batch_rejects_nested_decorated_calls_and_batch_write_queries() -> None:
+def test_batch_rejects_nested_decorated_and_context_calls() -> None:
     executor = FakeExecutor(responses_for("SPD3303X"))
     psu = SPD3000(executor)
 
@@ -579,8 +634,10 @@ def test_batch_rejects_nested_decorated_calls_and_batch_write_queries() -> None:
     with pytest.raises(SPD3000ValidationError, match="Nested"):
         outer()
 
-    with pytest.raises(SPD3000ValidationError, match=r"psu\.batch_write"), psu.batch_write:
-        _ = psu.ch1.voltage
+    with pytest.raises(
+        SPD3000ValidationError, match="Nested"
+    ), psu.batch(), psu.batch():
+        pass
 
 
 def test_batch_decorator_unwraps_structured_and_multi_query_results() -> None:
@@ -647,7 +704,7 @@ def test_batch_decorator_queries_compose_with_write_verification_queries() -> No
 
     @psu.batch
     def configure_and_read() -> object:
-        with psu.verify_write:
+        with psu.verify_writes():
             psu.ch1.voltage = 5.0
         return psu.ch1.voltage
 
@@ -656,7 +713,7 @@ def test_batch_decorator_queries_compose_with_write_verification_queries() -> No
     assert voltage == 5.0
 
 
-def test_verify_executes_each_setter_as_its_own_write_query_batch() -> None:
+def test_verify_writes_executes_each_setter_as_its_own_write_query_batch() -> None:
     executor = FakeExecutor(
         responses_for(
             "SPD3303X",
@@ -668,7 +725,7 @@ def test_verify_executes_each_setter_as_its_own_write_query_batch() -> None:
     )
     psu = SPD3000(executor)
 
-    with psu.verify_write:
+    with psu.verify_writes():
         psu.ch1.voltage = 5.0
         psu.ch1.current = 0.5
 
@@ -678,7 +735,7 @@ def test_verify_executes_each_setter_as_its_own_write_query_batch() -> None:
     ]
 
 
-def test_verify_write_is_a_settable_global_switch_and_scoped_context() -> None:
+def test_verify_writes_globally_is_a_settable_bool_property() -> None:
     executor = FakeExecutor(
         responses_for(
             "SPD3303X",
@@ -687,46 +744,54 @@ def test_verify_write_is_a_settable_global_switch_and_scoped_context() -> None:
             },
         )
     )
-    psu = SPD3000(executor, verify_write=True)
+    psu = SPD3000(executor, verify_writes_globally=True)
 
-    assert psu.verify_write.enabled is True
-    assert bool(psu.verify_write) is True
-    assert repr(psu.verify_write) == "VerifyWrite(enabled=True)"
+    assert psu.verify_writes_globally is True
     psu.ch1.voltage = 5.0
 
-    psu.verify_write = False
-    assert psu.verify_write.enabled is False
+    psu.verify_writes_globally = False
+    assert psu.verify_writes_globally is False
     psu.ch1.current = 0.5
 
-    with psu.verify_write:
+    with psu.verify_writes():
         psu.ch1.voltage = 4.0
 
-    assert psu.verify_write.enabled is False
+    assert psu.verify_writes_globally is False
     assert executor.batches[-3:] == [
         ["CH1:VOLT 5", "CH1:VOLT?"],
         ["CH1:CURR 0.5"],
         ["CH1:VOLT 4", "CH1:VOLT?"],
     ]
 
-    with pytest.raises(SPD3000ValidationError, match="verify_write must be a bool"):
-        psu.verify_write = 1  # type: ignore[assignment]
+    with pytest.raises(
+        SPD3000ValidationError, match="verify_writes_globally must be a bool"
+    ):
+        psu.verify_writes_globally = 1  # type: ignore[assignment]
+    with pytest.raises(SPD3000ValidationError, match="enabled must be a bool"):
+        psu.verify_writes(1)  # type: ignore[arg-type]
 
 
-def test_verify_write_switch_is_captured_per_setter_inside_batch_write() -> None:
+def test_verify_writes_override_is_captured_per_setter_inside_batch() -> None:
     executor = FakeExecutor(responses_for("SPD3303X", **{"CH1:VOLT?": ["5"]}))
     psu = SPD3000(executor)
 
-    with psu.batch_write:
-        psu.verify_write = True
-        psu.ch1.voltage = 5.0
-        psu.verify_write = False
+    psu.verify_writes_globally = True
+    with psu.batch(), psu.verify_writes(False):
         psu.ch1.current = 0.5
+        with psu.verify_writes():
+            psu.ch1.voltage = 5.0
+        psu.ch2.current = 0.5
 
-    assert executor.batches[-1] == ["CH1:VOLT 5", "CH1:VOLT?", "CH1:CURR 0.5"]
-    assert psu.verify_write.enabled is False
+    assert executor.batches[-1] == [
+        "CH1:CURR 0.5",
+        "CH1:VOLT 5",
+        "CH1:VOLT?",
+        "CH2:CURR 0.5",
+    ]
+    assert psu.verify_writes_globally is True
 
 
-def test_batch_and_verify_compose_into_one_non_interleaved_batch() -> None:
+def test_batch_and_verify_writes_compose_into_one_non_interleaved_batch() -> None:
     executor = FakeExecutor(
         responses_for(
             "SPD3303X",
@@ -734,15 +799,17 @@ def test_batch_and_verify_compose_into_one_non_interleaved_batch() -> None:
                 "CH1:VOLT?": ["5"],
                 "CH1:CURR?": ["0.5"],
                 "SYST:STAT?": ["0x10"],
+                "MEAS:VOLT? CH1": ["4.9"],
             },
         )
     )
     psu = SPD3000(executor)
 
-    with psu.batch_write, psu.verify_write:
+    with psu.batch() as responses, psu.verify_writes():
         psu.ch1.voltage = 5.0
         psu.ch1.current = 0.5
         psu.ch1.output = True
+        _ = psu.measure.voltage(Channel.CH1)
 
     assert executor.batches[-1] == [
         "CH1:VOLT 5",
@@ -751,7 +818,9 @@ def test_batch_and_verify_compose_into_one_non_interleaved_batch() -> None:
         "CH1:CURR?",
         "OUTP CH1,ON",
         "SYST:STAT?",
+        "MEAS:VOLT? CH1",
     ]
+    assert responses[:] == (4.9,)
 
 
 def test_verify_mismatch_raises_structured_verification_error_after_write() -> None:
@@ -760,7 +829,7 @@ def test_verify_mismatch_raises_structured_verification_error_after_write() -> N
 
     with pytest.raises(
         SPD3000VerificationError, match=r"expected 5\.0"
-    ) as caught, psu.verify_write:
+    ) as caught, psu.verify_writes():
         psu.ch1.voltage = 5.0
 
     assert caught.value.command == "CH1:VOLT 5"
@@ -793,14 +862,14 @@ def test_verify_wraps_a_failed_readback_but_not_a_failed_write() -> None:
 
     query_failure = FailingExecutor(failed_index=1)
     query_psu = SPD3000(query_failure)
-    with pytest.raises(SPD3000VerificationError) as caught, query_psu.verify_write:
+    with pytest.raises(SPD3000VerificationError) as caught, query_psu.verify_writes():
         query_psu.ch1.voltage = 5.0
     assert isinstance(caught.value.__cause__, SPD3000TimeoutError)
     assert caught.value.command == "CH1:VOLT 5"
     assert caught.value.query == "CH1:VOLT?"
 
     write_failure = FailingExecutor(failed_index=0)
-    with pytest.raises(SPD3000TimeoutError), SPD3000(write_failure).verify_write as psu:
+    with pytest.raises(SPD3000TimeoutError), SPD3000(write_failure).verify_writes() as psu:
         psu.ch1.voltage = 5.0
 
 
@@ -810,7 +879,7 @@ def test_verify_reports_unqueryable_state_only_after_sending_the_write() -> None
 
     with pytest.raises(
         SPD3000VerificationError, match="no query"
-    ) as caught, psu.verify_write:
+    ) as caught, psu.verify_writes():
         psu.ch3.output = True
 
     assert executor.commands[-1] == "OUTP CH3,ON"
@@ -838,7 +907,7 @@ def test_verify_supports_the_remaining_semantic_write_commands() -> None:
     )
     psu = SPD3000(executor)
 
-    with psu.verify_write:
+    with psu.verify_writes():
         psu.instrument = Channel.CH2
         psu.output.track(TrackingMode.SERIES)
         psu.output.wave(Channel.CH2, WaveformState.ON)
@@ -860,12 +929,12 @@ def test_verify_reports_memory_and_raw_writes_as_unverifiable_after_execution() 
 
     with pytest.raises(
         SPD3000VerificationError, match="saved setup slot"
-    ), psu.verify_write:
+    ), psu.verify_writes():
         psu.save(1)
     assert executor.commands[-1] == "*SAV 1"
 
     with pytest.raises(
         SPD3000VerificationError, match="No automatic"
-    ), psu.verify_write:
+    ), psu.verify_writes():
         psu.scpi.write("CUSTOM 1")
     assert executor.commands[-1] == "CUSTOM 1"

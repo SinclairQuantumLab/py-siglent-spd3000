@@ -96,8 +96,8 @@ def test_semantic_verified_batch_reaches_gateway_as_one_batch() -> None:
                 "127.0.0.1", port=server.port, settings=ExecutionSettings(0.01)
             )
         ) as psu,
-        psu.batch_write,
-        psu.verify_write,
+        psu.batch(),
+        psu.verify_writes(),
     ):
         psu.ch1.voltage = 5.0
         psu.ch1.current = 0.5

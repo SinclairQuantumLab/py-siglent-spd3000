@@ -51,10 +51,10 @@ Record every unexpected raw response before changing the parser or API.
 
 - [ ] `SET-01`: Save the initial CH1 and CH2 voltage and current settings for cleanup.
 - [ ] `SET-02`: Select CH1 through `psu.instrument`, query it back, select CH2, and query it back.
-- [ ] `SET-03`: Set CH1 to a low model-aligned voltage and current limit inside `with psu.batch_write, psu.verify_write:`, require one non-interleaved write/readback batch, and require exact values at the model resolution.
+- [ ] `SET-03`: Set CH1 to a low model-aligned voltage and current limit inside `with psu.batch(), psu.verify_writes():`, require one non-interleaved write/readback batch, and require exact values at the model resolution.
 - [ ] `SET-04`: Repeat the same voltage and current round trip on CH2.
 - [ ] `SET-05`: Repeat one setter using the documented minimum value and one using the documented maximum value while all outputs remain off.
-- [ ] `SET-06`: Restore the initial CH1 and CH2 voltage and current settings inside `with psu.batch_write:`, then query them back after the safety-critical restoration batch has completed.
+- [ ] `SET-06`: Restore the initial CH1 and CH2 voltage and current settings inside `with psu.batch():`, then query them back after the safety-critical restoration batch has completed.
 - [ ] `SET-07`: Query `psu.system.error` and require the no-error result.
 
 ## 4. CH1 and CH2 output-state test

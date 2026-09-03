@@ -6,9 +6,9 @@ import math
 import threading
 import time
 import warnings
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
-from typing import Generic, Protocol, TypeVar, cast
+from typing import Generic, Protocol, TypeVar, cast, overload
 
 from .exceptions import (
     SPD3000ConnectionError,
@@ -123,7 +123,7 @@ class Deferred(Generic[_T]):
 
     def _cancel(self) -> None:
         self._error = SPD3000DeferredResultError(
-            f"Query {self.command!r} was cancelled because its batch function did not complete"
+            f"Query {self.command!r} was cancelled because its batch body did not complete"
         )
 
     def __repr__(self) -> str:
@@ -134,6 +134,67 @@ class Deferred(Generic[_T]):
         else:
             state = f"value={self._value!r}"
         return f"Deferred(command={self.command!r}, {state})"
+
+
+class BatchResponses(Sequence[object]):
+    """Parsed user-query results populated when a semantic batch exits."""
+
+    def __init__(self) -> None:
+        self._values: object = _PENDING
+        self._error: BaseException | None = None
+
+    @property
+    def done(self) -> bool:
+        """Whether batch execution has completed, failed, or been cancelled."""
+
+        return self._values is not _PENDING or self._error is not None
+
+    @property
+    def values(self) -> tuple[object, ...]:
+        """Return all parsed user-query results in source order."""
+
+        if self._error is not None:
+            raise self._error
+        if self._values is _PENDING:
+            raise SPD3000DeferredResultError(
+                "Batch responses are pending until the batch context exits"
+            )
+        return cast(tuple[object, ...], self._values)
+
+    def __len__(self) -> int:
+        return len(self.values)
+
+    @overload
+    def __getitem__(self, index: int) -> object: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> tuple[object, ...]: ...
+
+    def __getitem__(self, index: int | slice) -> object | tuple[object, ...]:
+        return self.values[index]
+
+    def __iter__(self) -> Iterator[object]:
+        return iter(self.values)
+
+    def _resolve(self, values: Sequence[object]) -> None:
+        self._values = tuple(values)
+
+    def _reject(self, error: BaseException) -> None:
+        self._error = error
+
+    def _cancel(self) -> None:
+        self._error = SPD3000DeferredResultError(
+            "Batch responses were cancelled because the batch body did not complete"
+        )
+
+    def __repr__(self) -> str:
+        if self._error is not None:
+            state = f"failed={type(self._error).__name__}"
+        elif self._values is _PENDING:
+            state = "pending"
+        else:
+            state = f"values={self._values!r}"
+        return f"BatchResponses({state})"
 
 
 @dataclass(frozen=True, init=False)

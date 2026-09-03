@@ -22,6 +22,7 @@ from .exceptions import (
     UnsupportedFeatureError,
 )
 from .execution import (
+    BatchResponses,
     BatchResult,
     CommandBatch,
     Deferred,
@@ -53,6 +54,7 @@ from .scpi import Access, CommandInfo, iter_commands, lookup_command
 __all__ = [
     "SPD3000",
     "Access",
+    "BatchResponses",
     "BatchResult",
     "Capabilities",
     "Channel",

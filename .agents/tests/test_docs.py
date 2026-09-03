@@ -158,14 +158,17 @@ def test_batching_and_verification_are_documented_as_separate_contexts() -> None
     guide = readme.split("## Batching and verification", 1)[1].split("## Timing", 1)[0]
 
     assert "@psu.batch" in guide
-    assert "with psu.batch_write:" in guide
-    assert "with psu.verify_write:" in guide
-    assert "with psu.batch_write, psu.verify_write:" in guide
-    assert "verify_write=True" in guide
-    assert "psu.verify_write = False" in guide
-    assert "psu.verify_write.enabled" in guide
-    assert "internally deferred" in guide
+    assert "with psu.batch():" in guide
+    assert "with psu.batch() as responses:" in guide
+    assert "voltage, measured_current = responses" in guide
+    assert "with psu.verify_writes():" in guide
+    assert "with psu.verify_writes(False):" in guide
+    assert "with psu.batch(), psu.verify_writes():" in guide
+    assert "verify_writes_globally=True" in guide
+    assert "psu.verify_writes_globally = False" in guide
+    assert "ordinary bool property" in guide
     assert 'print(values["voltage"])  # float' in guide
+    assert "automatic verification readbacks are omitted" in guide
     assert "Raw `psu.scpi.query()` can also be collected" in guide
     assert "SPD3000VerificationError" in guide
     assert "never imply rollback" in guide

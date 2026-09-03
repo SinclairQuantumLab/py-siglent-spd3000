@@ -354,13 +354,36 @@ Use `lookup_command("MEAS:VOLT?")` to discover the corresponding Python path, or
 ## Batching and verification
 
 Ordinary setters execute immediately and do not perform an implicit readback.
-Decorate a function with `@psu.batch` to execute its semantic writes and queries as one non-interleaved batch:
+Use `psu.batch()` to collect semantic writes and queries and execute them as one non-interleaved batch.
+A write-only batch needs no separate API:
+
+```python
+with psu.batch():
+    psu.ch1.voltage = 5.0
+    psu.ch1.current = 0.5
+```
+
+Use `as responses` to receive the parsed results of user-issued queries in source order:
+
+```python
+with psu.batch() as responses:
+    psu.ch1.voltage
+    psu.measure.current(spd.Channel.CH1)
+
+voltage, measured_current = responses
+```
+
+`responses` contains only explicit user-query results; writes and automatic verification readbacks are omitted.
+Results are unavailable inside the block and become ordinary parsed Python values when it exits successfully.
+If the block raises, its collected operations are discarded without being sent.
+Execution and response-parsing failures are raised when the block exits.
+
+`@psu.batch` is a convenience wrapper around the same `psu.batch()` context and unwraps Deferred values in the decorated function's returned built-in containers:
 
 ```python
 @psu.batch
 def configure_and_read():
     psu.ch1.voltage = 5.0
-    psu.ch1.current = 0.5
     return {
         "voltage": psu.ch1.voltage,
         "measured": psu.measure.voltage(spd.Channel.CH1),
@@ -371,51 +394,38 @@ print(values["voltage"])  # float
 print(values["measured"])  # float
 ```
 
-The function body sends nothing immediately; its query expressions are internally deferred until the function returns.
-The decorator then executes the collected operations and replaces Deferred values in the returned built-in containers with their ordinary parsed Python values.
-If the function body raises, its collected operations are discarded without being sent.
-Execution and response-parsing failures are raised by the decorated function call.
-
-Use `psu.batch_write` when only writes need to be grouped and no result needs to be returned:
-
-```python
-with psu.batch_write:
-    psu.ch1.voltage = 5.0
-    psu.ch1.current = 0.5
-    psu.ch1.output = True
-```
-
-Queries inside `with psu.batch_write:` are rejected so a result cannot be accidentally requested from a deferred write-only block.
-
 Write verification is disabled by default.
-Pass `verify_write=True` to the constructor or `connect()` to verify every supported semantic write:
+Pass `verify_writes_globally=True` to the constructor or `connect()` to verify every supported semantic write:
 
 ```python
 with spd.SPD3000.connect(
     spd.ConnectionType.SOCKET,
     "192.168.1.50",
-    verify_write=True,
+    verify_writes_globally=True,
 ) as psu:
     psu.ch1.voltage = 5.0
 
-    psu.verify_write = False
+    psu.verify_writes_globally = False
     psu.ch1.current = 0.5
 ```
 
-`psu.verify_write` is a settable property backed by a reusable context control.
-Read its global state with `psu.verify_write.enabled` or `bool(psu.verify_write)`.
-Use `with psu.verify_write:` to enable verification only within one scope, regardless of the global setting:
+`psu.verify_writes_globally` is an ordinary bool property that can be read or changed at any time.
+Here, globally means all subsequent writes made through that `psu` instance rather than every driver instance in the process.
+Use `psu.verify_writes()` to force verification on within one scope, or pass `False` to force it off temporarily:
 
 ```python
-with psu.verify_write:
+with psu.verify_writes():
     psu.ch1.voltage = 5.0
+
+with psu.verify_writes(False):
+    psu.ch1.current = 0.5
 ```
 
-Without `psu.batch_write`, each setter executes its own non-interleaved write/query pair.
+Without `psu.batch()`, each verified setter executes its own non-interleaved write/query pair.
 The two contexts compose, so several verified settings can travel as one write batch:
 
 ```python
-with psu.batch_write, psu.verify_write:
+with psu.batch(), psu.verify_writes():
     psu.ch1.voltage = 5.0
     psu.ch1.current = 0.5
     psu.ch1.output = True
@@ -427,7 +437,7 @@ The exception exposes `command`, `query`, `expected`, and `actual`; the original
 
 ```python
 try:
-    with psu.verify_write:
+    with psu.verify_writes():
         psu.ch3.output = True
 except spd.SPD3000VerificationError as exc:
     print(exc.command)   # "OUTP CH3,ON" was sent
@@ -436,7 +446,7 @@ except spd.SPD3000VerificationError as exc:
 
 Verification errors never imply rollback.
 In particular, an unqueryable setting such as CH3 output is applied first and then reported as unverifiable, and writes completed before a later batch failure may remain applied.
-Raw `psu.scpi.query()` can also be collected inside an `@psu.batch` function.
+Raw `psu.scpi.query()` can also be collected inside `psu.batch()` or an `@psu.batch` function.
 The already-assembled `psu.scpi.execute()` escape hatch cannot be nested inside a batch or verification scope because it owns a separate immediate batch.
 
 ## Timing

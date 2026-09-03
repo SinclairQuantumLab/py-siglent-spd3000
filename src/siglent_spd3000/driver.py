@@ -10,7 +10,7 @@ from decimal import Decimal, InvalidOperation
 from functools import wraps
 from ipaddress import AddressValueError, IPv4Address, IPv4Network, NetmaskValueError
 from types import TracebackType
-from typing import Generic, ParamSpec, TypeVar, cast, overload
+from typing import Any, Generic, ParamSpec, TypeVar, cast, overload
 
 from ._constants import DEFAULT_GATEWAY_PORT, DEFAULT_SCPI_PORT
 from .exceptions import (
@@ -21,6 +21,7 @@ from .exceptions import (
     UnsupportedFeatureError,
 )
 from .execution import (
+    BatchResponses,
     BatchResult,
     Command,
     CommandBatch,
@@ -267,36 +268,16 @@ def _unwrap_batch_return(value: object) -> object:
     return value
 
 
-class _BatchDecorator:
-    """Execute a function as one mixed batch and unwrap its returned queries."""
+class _BatchContext:
+    """Collect writes and user queries for one execution."""
 
     def __init__(self, device: SPD3000) -> None:
         self._device = device
+        self._responses = BatchResponses()
 
-    def __call__(self, function: Callable[_P, _R]) -> Callable[_P, _R]:
-        @wraps(function)
-        def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> _R:
-            self._device._begin_batch(allow_queries=True)
-            try:
-                returned = function(*args, **kwargs)
-            except BaseException:
-                self._device._end_batch(execute=False)
-                raise
-            self._device._end_batch(execute=True)
-            return cast(_R, _unwrap_batch_return(returned))
-
-        return wrapped
-
-
-class _BatchWriteContext:
-    """Collect writes for one execution while rejecting user queries."""
-
-    def __init__(self, device: SPD3000) -> None:
-        self._device = device
-
-    def __enter__(self) -> SPD3000:
-        self._device._begin_batch(allow_queries=False)
-        return self._device
+    def __enter__(self) -> BatchResponses:
+        self._device._begin_batch(self._responses)
+        return self._responses
 
     def __exit__(
         self,
@@ -307,24 +288,42 @@ class _BatchWriteContext:
         self._device._end_batch(execute=exc_type is None)
 
 
-class _VerifyWriteControl:
-    """Global write-verification setting and scoped context manager."""
+class _BatchController:
+    """Create batch contexts or decorate functions with the same mechanism."""
 
     def __init__(self, device: SPD3000) -> None:
         self._device = device
 
-    @property
-    def enabled(self) -> bool:
-        """Whether global write verification is enabled."""
+    @overload
+    def __call__(self) -> _BatchContext: ...
 
-        with self._device._operation_lock:
-            return self._device._verify_write_enabled
+    @overload
+    def __call__(self, function: Callable[_P, _R], /) -> Callable[_P, _R]: ...
 
-    def __bool__(self) -> bool:
-        return self.enabled
+    def __call__(
+        self, function: Callable[..., Any] | None = None
+    ) -> _BatchContext | Callable[..., Any]:
+        if function is None:
+            return _BatchContext(self._device)
+
+        @wraps(function)
+        def wrapped(*args: object, **kwargs: object) -> object:
+            with self():
+                returned = function(*args, **kwargs)
+            return _unwrap_batch_return(returned)
+
+        return wrapped
+
+
+class _VerifyWritesContext:
+    """Temporarily override write verification for one scope."""
+
+    def __init__(self, device: SPD3000, enabled: bool) -> None:
+        self._device = device
+        self._enabled = enabled
 
     def __enter__(self) -> SPD3000:
-        self._device._begin_verify_write()
+        self._device._begin_verify_writes(self._enabled)
         return self._device
 
     def __exit__(
@@ -333,10 +332,7 @@ class _VerifyWriteControl:
         _exc: BaseException | None,
         _traceback: TracebackType | None,
     ) -> None:
-        self._device._end_verify_write()
-
-    def __repr__(self) -> str:
-        return f"VerifyWrite(enabled={self.enabled!r})"
+        self._device._end_verify_writes()
 
 
 class ProgrammableChannel:
@@ -768,31 +764,32 @@ class RawSCPI:
 class SPD3000:
     """Semantic SPD3303X/X-E/C driver over an injected command executor.
 
-    ``batch`` decorates a function whose writes and queries execute as one
-    non-interleaved batch; Deferred query returns are unwrapped in the decorated
-    function's return value. ``batch_write`` is a query-free context manager.
-    ``verify_write`` is a settable global switch and a scoped context that adds
-    supported readbacks and raises
+    ``batch()`` collects writes and queries for one non-interleaved execution;
+    ``batch`` also decorates a function by wrapping it in that context and
+    unwrapping Deferred values in its return value. ``verify_writes()``
+    temporarily overrides the ``verify_writes_globally`` property and adds
+    supported readbacks that can raise
     :class:`SPD3000VerificationError` when a completed write cannot be verified.
-    The reusable contexts compose as ``with psu.batch_write, psu.verify_write:``.
+    The contexts compose as ``with psu.batch(), psu.verify_writes():``.
     """
 
-    def __init__(self, executor: Executor, *, verify_write: bool = False) -> None:
-        if not isinstance(verify_write, bool):
-            raise SPD3000ValidationError("verify_write must be a bool")
+    def __init__(
+        self, executor: Executor, *, verify_writes_globally: bool = False
+    ) -> None:
+        if not isinstance(verify_writes_globally, bool):
+            raise SPD3000ValidationError("verify_writes_globally must be a bool")
         self._executor = executor
         self._connection_type: ConnectionType | None = None
         self._connection_identifier: str | None = None
         self._closed = False
         self._operation_lock = threading.RLock()
         self._batch_active = False
-        self._batch_queries_allowed = False
         self._pending_operations: list[_PendingOperation] = []
-        self._verify_write_enabled = verify_write
-        self._verify_write_depth = 0
-        self._verify_write_control = _VerifyWriteControl(self)
-        self.batch = _BatchDecorator(self)
-        self.batch_write = _BatchWriteContext(self)
+        self._batch_responses: BatchResponses | None = None
+        self._batch_response_deferreds: list[Deferred[object]] = []
+        self._verify_writes_globally = verify_writes_globally
+        self._verify_writes_overrides: list[bool] = []
+        self.batch = _BatchController(self)
         try:
             identity = self._query("*IDN?", parse_identification)
             self._session_identity = cast(Identification, identity)
@@ -819,7 +816,7 @@ class SPD3000:
         *,
         timeout_s: float = 5.0,
         min_command_interval_ms: float = 100.0,
-        verify_write: bool = False,
+        verify_writes_globally: bool = False,
         token: str | None = None,
         visa_backend: str | None = None,
     ) -> SPD3000:
@@ -828,8 +825,9 @@ class SPD3000:
         ``identifier`` is a hostname or IP address for socket and VXI-11, a
         ``host[:port]`` endpoint for gateway connections, and a VISA resource
         string for VISA connections.
-        ``verify_write`` enables documented readback verification for semantic
-        writes and can be changed later through the property of the same name.
+        ``verify_writes_globally`` enables documented readback verification for
+        semantic writes and can be changed later through the property of the
+        same name.
         Method-specific options are rejected when supplied to another method.
         """
 
@@ -846,8 +844,8 @@ class SPD3000:
 
         if not isinstance(identifier, str) or not identifier.strip():
             raise SPD3000ValidationError("identifier must be a non-empty string")
-        if not isinstance(verify_write, bool):
-            raise SPD3000ValidationError("verify_write must be a bool")
+        if not isinstance(verify_writes_globally, bool):
+            raise SPD3000ValidationError("verify_writes_globally must be a bool")
         target = identifier.strip()
 
         if isinstance(min_command_interval_ms, bool) or not isinstance(
@@ -863,12 +861,16 @@ class SPD3000:
         if selected is ConnectionType.SOCKET:
             cls._reject_connection_options(selected, token=token, visa_backend=visa_backend)
             return cls._connect_socket(
-                target, settings=settings, verify_write=verify_write
+                target,
+                settings=settings,
+                verify_writes_globally=verify_writes_globally,
             )
         if selected is ConnectionType.VXI11:
             cls._reject_connection_options(selected, token=token, visa_backend=visa_backend)
             return cls._connect_vxi11(
-                target, settings=settings, verify_write=verify_write
+                target,
+                settings=settings,
+                verify_writes_globally=verify_writes_globally,
             )
         if selected is ConnectionType.VISA:
             cls._reject_connection_options(selected, token=token)
@@ -876,7 +878,7 @@ class SPD3000:
                 target,
                 backend=visa_backend,
                 settings=settings,
-                verify_write=verify_write,
+                verify_writes_globally=verify_writes_globally,
             )
 
         cls._reject_connection_options(selected, visa_backend=visa_backend)
@@ -886,7 +888,7 @@ class SPD3000:
             port=gateway_port,
             token=token,
             settings=settings,
-            verify_write=verify_write,
+            verify_writes_globally=verify_writes_globally,
         )
 
     @staticmethod
@@ -949,7 +951,7 @@ class SPD3000:
         host: str,
         *,
         settings: ExecutionSettings,
-        verify_write: bool,
+        verify_writes_globally: bool,
     ) -> SPD3000:
         """Build a driver over an SPD3303X/X-E raw SCPI socket."""
 
@@ -957,7 +959,7 @@ class SPD3000:
             DirectExecutor(
                 SocketTransport(host, port=DEFAULT_SCPI_PORT, timeout=settings.timeout), settings
             ),
-            verify_write=verify_write,
+            verify_writes_globally=verify_writes_globally,
         )
         device._set_connection_metadata(ConnectionType.SOCKET, f"{host}:{DEFAULT_SCPI_PORT}")
         if not device.capabilities.socket:
@@ -967,13 +969,17 @@ class SPD3000:
 
     @classmethod
     def _connect_vxi11(
-        cls, host: str, *, settings: ExecutionSettings, verify_write: bool
+        cls,
+        host: str,
+        *,
+        settings: ExecutionSettings,
+        verify_writes_globally: bool,
     ) -> SPD3000:
         """Build a driver over an SPD3303X/X-E VXI-11 connection."""
 
         device = cls(
             DirectExecutor(VXI11Transport(host, timeout=settings.timeout), settings),
-            verify_write=verify_write,
+            verify_writes_globally=verify_writes_globally,
         )
         device._set_connection_metadata(ConnectionType.VXI11, host)
         if not device.capabilities.vxi11:
@@ -988,12 +994,15 @@ class SPD3000:
         *,
         backend: str | None = None,
         settings: ExecutionSettings,
-        verify_write: bool,
+        verify_writes_globally: bool,
     ) -> SPD3000:
         """Build a driver over a PyVISA resource."""
 
         transport = VisaTransport(resource, backend=backend, timeout=settings.timeout)
-        device = cls(DirectExecutor(transport, settings), verify_write=verify_write)
+        device = cls(
+            DirectExecutor(transport, settings),
+            verify_writes_globally=verify_writes_globally,
+        )
         device._set_connection_metadata(ConnectionType.VISA, resource)
         return device
 
@@ -1005,7 +1014,7 @@ class SPD3000:
         port: int = DEFAULT_GATEWAY_PORT,
         token: str | None = None,
         settings: ExecutionSettings,
-        verify_write: bool,
+        verify_writes_globally: bool,
     ) -> SPD3000:
         """Build a driver over a persistent gateway session."""
 
@@ -1014,7 +1023,7 @@ class SPD3000:
         endpoint = f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
         device = cls(
             GatewayExecutor(host, port=port, token=token, settings=settings),
-            verify_write=verify_write,
+            verify_writes_globally=verify_writes_globally,
         )
         device._set_connection_metadata(ConnectionType.GATEWAY, endpoint)
         return device
@@ -1026,22 +1035,25 @@ class SPD3000:
         self._connection_identifier = identifier
 
     @property
-    def verify_write(self) -> _VerifyWriteControl:
-        """Global write-verification switch and scoped verification context.
+    def verify_writes_globally(self) -> bool:
+        """Whether semantic writes are verified by default for this instance."""
 
-        Assign a bool to enable or disable global verification, inspect
-        ``verify_write.enabled`` or ``bool(verify_write)`` to read it, and use
-        ``with psu.verify_write:`` to enable verification only for one scope.
-        """
-
-        return self._verify_write_control
-
-    @verify_write.setter
-    def verify_write(self, enabled: bool) -> None:
-        if not isinstance(enabled, bool):
-            raise SPD3000ValidationError("verify_write must be a bool")
         with self._operation_lock:
-            self._verify_write_enabled = enabled
+            return self._verify_writes_globally
+
+    @verify_writes_globally.setter
+    def verify_writes_globally(self, enabled: bool) -> None:
+        if not isinstance(enabled, bool):
+            raise SPD3000ValidationError("verify_writes_globally must be a bool")
+        with self._operation_lock:
+            self._verify_writes_globally = enabled
+
+    def verify_writes(self, enabled: bool = True) -> _VerifyWritesContext:
+        """Temporarily force write verification on or off for one scope."""
+
+        if not isinstance(enabled, bool):
+            raise SPD3000ValidationError("verify_writes enabled must be a bool")
+        return _VerifyWritesContext(self, enabled)
 
     @property
     def connection_type(self) -> ConnectionType | None:
@@ -1263,7 +1275,7 @@ class SPD3000:
         unavailable_reason: str | None = None,
     ) -> None:
         with self._operation_lock:
-            if self._verify_write_enabled or self._verify_write_depth:
+            if self._should_verify_writes():
                 selected_verification = verification or _Verification(
                     query=None,
                     expected=None,
@@ -1298,50 +1310,66 @@ class SPD3000:
             deferred: Deferred[_T] = Deferred(label)
             pending = _PendingRead(commands, parser, deferred)
             if self._batch_active:
-                if not self._batch_queries_allowed:
-                    raise SPD3000ValidationError(
-                        "Queries cannot be used inside with psu.batch_write"
-                    )
                 self._pending_operations.append(cast(_PendingRead[object], pending))
+                self._batch_response_deferreds.append(cast(Deferred[object], deferred))
                 return deferred
             self._execute_pending_operations([cast(_PendingRead[object], pending)])
             return deferred.value
 
-    def _begin_batch(self, *, allow_queries: bool) -> None:
+    def _begin_batch(self, responses: BatchResponses) -> None:
         self._operation_lock.acquire()
         if self._batch_active:
             self._operation_lock.release()
             raise SPD3000ValidationError("Nested batch executions are not supported")
         self._batch_active = True
-        self._batch_queries_allowed = allow_queries
         self._pending_operations = []
+        self._batch_responses = responses
+        self._batch_response_deferreds = []
 
     def _end_batch(self, *, execute: bool) -> None:
         try:
             pending = self._pending_operations
+            responses = self._batch_responses
+            deferreds = self._batch_response_deferreds
             self._pending_operations = []
             self._batch_active = False
-            self._batch_queries_allowed = False
-            if execute and pending:
-                self._execute_pending_operations(pending)
-            elif not execute:
+            self._batch_responses = None
+            self._batch_response_deferreds = []
+            if not execute:
                 for operation in pending:
                     if isinstance(operation, _PendingRead):
                         operation.deferred._cancel()
+                if responses is not None:
+                    responses._cancel()
+                return
+            try:
+                if pending:
+                    self._execute_pending_operations(pending)
+                if responses is not None:
+                    responses._resolve([deferred.value for deferred in deferreds])
+            except BaseException as exc:
+                if responses is not None:
+                    responses._reject(exc)
+                raise
         finally:
             self._operation_lock.release()
 
-    def _begin_verify_write(self) -> None:
+    def _begin_verify_writes(self, enabled: bool) -> None:
         self._operation_lock.acquire()
-        self._verify_write_depth += 1
+        self._verify_writes_overrides.append(enabled)
 
-    def _end_verify_write(self) -> None:
+    def _end_verify_writes(self) -> None:
         try:
-            if self._verify_write_depth <= 0:
-                raise RuntimeError("psu.verify_write context exited without entering")
-            self._verify_write_depth -= 1
+            if not self._verify_writes_overrides:
+                raise RuntimeError("psu.verify_writes context exited without entering")
+            self._verify_writes_overrides.pop()
         finally:
             self._operation_lock.release()
+
+    def _should_verify_writes(self) -> bool:
+        if self._verify_writes_overrides:
+            return self._verify_writes_overrides[-1]
+        return self._verify_writes_globally
 
     def _execute_pending_operations(self, pending: Sequence[_PendingOperation]) -> None:
         commands: list[Command] = []
@@ -1494,9 +1522,9 @@ class SPD3000:
                 raise SPD3000ValidationError(
                     "psu.scpi.execute() cannot run inside a batch collection scope"
                 )
-            if self._verify_write_enabled or self._verify_write_depth:
+            if self._should_verify_writes():
                 raise SPD3000ValidationError(
-                    "psu.verify_write cannot infer expected values for psu.scpi.execute()"
+                    "psu.verify_writes() cannot infer expected values for psu.scpi.execute()"
                 )
             return self._executor.execute(batch)
 
