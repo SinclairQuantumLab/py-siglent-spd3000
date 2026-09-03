@@ -76,7 +76,7 @@
    "outputs": [],
    "source": [
     "identity = psu.idn\n",
-    "pprint(asdict(identity), sort_dicts=False)\n",
+    "print(identity)\n",
     "pprint(asdict(psu.capabilities), sort_dicts=False)\n",
     "pprint(\n",
     "    {\n",

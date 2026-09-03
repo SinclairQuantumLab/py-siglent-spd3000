@@ -9,6 +9,14 @@ from siglent_spd3000.models import parse_identification, parse_system_error
 def test_identification_alias_and_unknown_model() -> None:
     identity = parse_identification("SIGLENT,SPD3303XE,SERIAL,1.2.3")
     assert identity.model is Model.SPD3303X_E
+    assert str(identity) == (
+        "SIGLENT SPD3000 Series instrument identification\n"
+        "- Manufacturer: SIGLENT\n"
+        "- Model: SPD3303X-E\n"
+        "- Serial number: SERIAL\n"
+        "- Firmware version: 1.2.3\n"
+        "- Raw response: SIGLENT,SPD3303XE,SERIAL,1.2.3"
+    )
 
     with pytest.raises(SPD3000ProtocolError):
         parse_identification("SIGLENT,OTHER,SERIAL,1")

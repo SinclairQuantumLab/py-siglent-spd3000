@@ -89,6 +89,20 @@ class Identification:
     firmware_version: str
     raw: str
 
+    def __str__(self) -> str:
+        """Return all identification fields in a readable multiline summary."""
+
+        return "\n".join(
+            (
+                "SIGLENT SPD3000 Series instrument identification",
+                f"- Manufacturer: {self.manufacturer}",
+                f"- Model: {self.model.value}",
+                f"- Serial number: {self.serial_number}",
+                f"- Firmware version: {self.firmware_version}",
+                f"- Raw response: {self.raw}",
+            )
+        )
+
 
 @dataclass(frozen=True)
 class Capabilities:
