@@ -39,8 +39,8 @@
     "from __future__ import annotations\n",
     "\n",
     "import atexit\n",
-    "import json\n",
     "from dataclasses import asdict\n",
+    "from pprint import pprint\n",
     "from time import monotonic, sleep\n",
     "\n",
     "import siglent_spd3000 as spd\n",
@@ -76,13 +76,14 @@
    "outputs": [],
    "source": [
     "identity = psu.idn\n",
-    "print(json.dumps(asdict(identity), indent=2, default=str))\n",
-    "print(json.dumps(asdict(psu.capabilities), indent=2, default=str))\n",
-    "print(\n",
+    "pprint(asdict(identity), sort_dicts=False)\n",
+    "pprint(asdict(psu.capabilities), sort_dicts=False)\n",
+    "pprint(\n",
     "    {\n",
     "        \"timeout_s\": psu.settings.timeout,\n",
     "        \"min_command_interval_ms\": psu.settings.min_command_interval * 1000.0,\n",
-    "    }\n",
+    "    },\n",
+    "    sort_dicts=False,\n",
     ")\n",
     "assert identity.model is psu.model\n",
     "assert identity.raw == psu.scpi.query(\"*IDN?\")"
@@ -104,7 +105,7 @@
    "outputs": [],
    "source": [
     "status = psu.system.status\n",
-    "print(json.dumps(asdict(status), indent=2, default=str))\n",
+    "pprint(asdict(status), sort_dicts=False)\n",
     "print(f\"System version: {psu.system.version}\")"
    ]
   },
@@ -135,7 +136,7 @@
     "    }\n",
     "    if psu.capabilities.measure_power:\n",
     "        values[\"measured_power_w\"] = psu.measure.power(channel)\n",
-    "    print(json.dumps(values, indent=2))"
+    "    pprint(values, sort_dicts=False)"
    ]
   },
   {
@@ -154,19 +155,20 @@
    "outputs": [],
    "source": [
     "if psu.capabilities.network:\n",
-    "    print(\n",
+    "    pprint(\n",
     "        {\n",
     "            \"ip_address\": psu.network.host,\n",
     "            \"subnet_mask\": psu.network.subnet_mask,\n",
     "            \"gateway\": psu.network.gateway,\n",
     "            \"dhcp\": psu.network.dhcp,\n",
-    "        }\n",
+    "        },\n",
+    "        sort_dicts=False,\n",
     "    )\n",
     "else:\n",
     "    print(f\"Network queries are not supported by {psu.model.value}\")\n",
     "\n",
     "if psu.capabilities.lock_query:\n",
-    "    print({\"front_panel_locked\": psu.locked})\n",
+    "    pprint({\"front_panel_locked\": psu.locked}, sort_dicts=False)\n",
     "else:\n",
     "    print(f\"Lock-state query is not supported by {psu.model.value}\")"
    ]
@@ -236,7 +238,7 @@
    "source": [
     "READ_ONE_ERROR_QUEUE_ENTRY = False\n",
     "if READ_ONE_ERROR_QUEUE_ENTRY:\n",
-    "    print(asdict(psu.system.error))\n",
+    "    pprint(asdict(psu.system.error), sort_dicts=False)\n",
     "else:\n",
     "    print(\"Skipped; set READ_ONE_ERROR_QUEUE_ENTRY = True to consume one entry\")"
    ]
@@ -294,11 +296,12 @@
     "            source.output = True\n",
     "            assert source.output is True\n",
     "            sleep(OUTPUT_ON_SECONDS)\n",
-    "            print(\n",
+    "            pprint(\n",
     "                {\n",
     "                    \"measured_voltage_v\": psu.measure.voltage(TEST_CHANNEL),\n",
     "                    \"measured_current_a\": psu.measure.current(TEST_CHANNEL),\n",
-    "                }\n",
+    "                },\n",
+    "                sort_dicts=False,\n",
     "            )\n",
     "    finally:\n",
     "        source.output = False\n",
@@ -368,12 +371,13 @@
     "    timer_status = psu.system.status\n",
     "    channel_status = timer_status.ch1 if TEST_CHANNEL is spd.Channel.CH1 else timer_status.ch2\n",
     "    original_waveform = channel_status.waveform\n",
-    "    print(\n",
+    "    pprint(\n",
     "        {\n",
     "            \"current_timer_step\": original_timer_step,\n",
     "            \"planned_timer_step\": TIMER_STEP,\n",
     "            \"current_waveform_display\": original_waveform,\n",
-    "        }\n",
+    "        },\n",
+    "        sort_dicts=False,\n",
     "    )\n",
     "    phrase = f\"OVERWRITE TIMER {TEST_CHANNEL.value} {TIMER_GROUP}\"\n",
     "    if input(f\"Type {phrase!r} to proceed: \").strip() != phrase:\n",
