@@ -131,16 +131,18 @@ def test_notebook_separates_batching_basic_control_and_write_verification() -> N
     basic_control = "".join(notebook["cells"][basic_control_index + 1]["source"])
     assert "psu.batch" not in basic_control
     assert "psu.verify_writes" not in basic_control
-    assert "psu.ch1.voltage = TEST_VOLTAGE_V" in basic_control
-    assert "psu.ch1.current = TEST_CURRENT_A" in basic_control
-    assert "psu.ch1.output = TEST_OUTPUT" in basic_control
+    assert basic_control == (
+        "psu.ch1.voltage = 1.0\n"
+        "psu.ch1.current = 0.1\n"
+        "psu.ch1.output = True"
+    )
     assert "with psu.verify_writes():" in notebook_text
     assert "psu.ch1.voltage = current_voltage" in notebook_text
     assert "psu.ch1.current = current_limit" in notebook_text
     assert "psu.ch1.output = current_output" in notebook_text
 
 
-def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
+def test_notebook_exercises_public_driver_paths_with_safety_guidance() -> None:
     notebook_text = json.dumps(_notebook())
 
     for expected in (
@@ -158,7 +160,6 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
         "with psu.batch():",
         "psu.lock()",
         "psu.close()",
-        "Cancelled before sending any write command",
         "finally:",
     ):
         assert expected in notebook_text
@@ -180,10 +181,10 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
     assert "if psu.capabilities.lock_query:" in notebook_text
     assert "asdict(" not in notebook_text
     assert "json.dumps" not in notebook_text
-    assert "TEST_VOLTAGE_V = 1.0" in notebook_text
-    assert "TEST_CURRENT_A = 0.1" in notebook_text
-    assert "TEST_OUTPUT = False" in notebook_text
-    assert "Apply this CH1 state?" in notebook_text
+    assert "isolated from sensitive hardware" in notebook_text
+    assert "psu.ch1.voltage = 1.0" in notebook_text
+    assert "psu.ch1.current = 0.1" in notebook_text
+    assert "psu.ch1.output = True" in notebook_text
     assert "CH1 voltage, current, and output writes were verified." in notebook_text
     assert "ENERGIZE_OUTPUT" not in notebook_text
     assert "RUN_CH3_OUTPUT_TEST = False" in notebook_text

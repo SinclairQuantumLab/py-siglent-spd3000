@@ -8,9 +8,9 @@
     "\n",
     "Copy this file to `test_spd300.ipynb`, select the Python environment containing this checkout, and run the cells in order.\n",
     "The notebook imports the installed `siglent_spd3000` package, so its results exercise the actual driver implementation rather than a duplicate test script.\n",
-    "Read-only cells come first.\n",
-    "Later cells that can change instrument state are disabled by default, show their plan, and require an exact confirmation phrase.\n",
-    "Disconnect sensitive DUTs, use a correctly rated load or meter, keep the front panel accessible, and stop immediately if an output cannot be disabled.\n",
+    "Read-only cells come first, followed by direct hardware-control tests.\n",
+    "Run this notebook only with the power supply isolated from sensitive hardware and connected only to a correctly rated dummy load or measurement instrument, so unexpected voltage, current, or output settings cannot damage anything.\n",
+    "Keep the front panel accessible, and stop immediately if an output cannot be disabled.\n",
     "The complete acceptance procedure remains in [`.agents/HARDWARE_TESTS.md`](.agents/HARDWARE_TESTS.md)."
    ]
   },
@@ -166,9 +166,8 @@
    "source": [
     "## 6. Basic CH1 output control\n",
     "\n",
-    "Set the three values below for a small direct control check.\n",
-    "This cell uses ordinary channel properties only, without batching or automatic write verification.\n",
-    "It asks once before sending commands and leaves CH1 in the requested output state, so keep `TEST_OUTPUT = False` unless the output is safely connected."
+    "These are three direct property writes without batching or automatic verification.\n",
+    "Edit the literal values as needed; `psu.ch1.output = True` leaves CH1 enabled."
    ]
   },
   {
@@ -177,20 +176,9 @@
    "metadata": {},
    "outputs": [],
    "source": [
-    "TEST_VOLTAGE_V = 1.0\n",
-    "TEST_CURRENT_A = 0.1\n",
-    "TEST_OUTPUT = False\n",
-    "\n",
-    "print(f\"Planned CH1 state: {TEST_VOLTAGE_V} V, {TEST_CURRENT_A} A, output={TEST_OUTPUT}\")\n",
-    "if input(\"Apply this CH1 state? Type 'yes' to continue: \").strip().lower() != \"yes\":\n",
-    "    print(\"Cancelled before sending any write command.\")\n",
-    "else:\n",
-    "    psu.ch1.voltage = TEST_VOLTAGE_V\n",
-    "    print(f\"Voltage: {psu.ch1.voltage} V\")\n",
-    "    psu.ch1.current = TEST_CURRENT_A\n",
-    "    print(f\"Current: {psu.ch1.current} A\")\n",
-    "    psu.ch1.output = TEST_OUTPUT\n",
-    "    print(f\"Output: {psu.ch1.output}\")"
+    "psu.ch1.voltage = 1.0\n",
+    "psu.ch1.current = 0.1\n",
+    "psu.ch1.output = True"
    ]
   },
   {
