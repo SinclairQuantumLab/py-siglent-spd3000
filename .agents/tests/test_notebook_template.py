@@ -97,9 +97,14 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
 
     assert "validate_grid_value" not in notebook_text
     assert "from decimal import Decimal" not in notebook_text
+    assert "from dataclasses import asdict" not in notebook_text
     assert "from pprint import pprint" in notebook_text
     assert "print(identity)" in notebook_text
-    assert "pprint(asdict(identity)" not in notebook_text
+    assert "print(psu.capabilities)" in notebook_text
+    assert "print(psu.settings)" in notebook_text
+    assert "print(status)" in notebook_text
+    assert "print(psu.system.error)" in notebook_text
+    assert "asdict(" not in notebook_text
     assert "json.dumps" not in notebook_text
     assert "ENERGIZE_OUTPUT = False" in notebook_text
     assert "RUN_CH3_OUTPUT_TEST = False" in notebook_text

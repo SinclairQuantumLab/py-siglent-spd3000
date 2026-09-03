@@ -39,7 +39,6 @@
     "from __future__ import annotations\n",
     "\n",
     "import atexit\n",
-    "from dataclasses import asdict\n",
     "from pprint import pprint\n",
     "from time import monotonic, sleep\n",
     "\n",
@@ -77,14 +76,8 @@
    "source": [
     "identity = psu.idn\n",
     "print(identity)\n",
-    "pprint(asdict(psu.capabilities), sort_dicts=False)\n",
-    "pprint(\n",
-    "    {\n",
-    "        \"timeout_s\": psu.settings.timeout,\n",
-    "        \"min_command_interval_ms\": psu.settings.min_command_interval * 1000.0,\n",
-    "    },\n",
-    "    sort_dicts=False,\n",
-    ")\n",
+    "print(psu.capabilities)\n",
+    "print(psu.settings)\n",
     "assert identity.model is psu.model\n",
     "assert identity.raw == psu.scpi.query(\"*IDN?\")"
    ]
@@ -105,7 +98,7 @@
    "outputs": [],
    "source": [
     "status = psu.system.status\n",
-    "pprint(asdict(status), sort_dicts=False)\n",
+    "print(status)\n",
     "print(f\"System version: {psu.system.version}\")"
    ]
   },
@@ -238,7 +231,7 @@
    "source": [
     "READ_ONE_ERROR_QUEUE_ENTRY = False\n",
     "if READ_ONE_ERROR_QUEUE_ENTRY:\n",
-    "    pprint(asdict(psu.system.error), sort_dicts=False)\n",
+    "    print(psu.system.error)\n",
     "else:\n",
     "    print(\"Skipped; set READ_ONE_ERROR_QUEUE_ENTRY = True to consume one entry\")"
    ]
