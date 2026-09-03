@@ -320,6 +320,29 @@ def test_network_uses_validated_strings() -> None:
         _ = psu.ipaddr
 
 
+def test_network_settings_returns_one_typed_snapshot_from_four_queries() -> None:
+    executor = FakeExecutor(
+        responses_for(
+            "SPD3303X",
+            **{
+                "IPADDR?": ["192.168.1.50"],
+                "MASKADDR?": ["255.255.255.0"],
+                "GATEADDR?": ["192.168.1.1"],
+                "DHCP?": ["DHCP:OFF"],
+            },
+        )
+    )
+    psu = SPD3000(executor)
+
+    settings = psu.network.settings
+
+    assert settings.host == "192.168.1.50"
+    assert settings.subnet_mask == "255.255.255.0"
+    assert settings.gateway == "192.168.1.1"
+    assert settings.dhcp is False
+    assert executor.commands[-4:] == ["IPADDR?", "MASKADDR?", "GATEADDR?", "DHCP?"]
+
+
 def test_canonical_and_friendly_memory_names_share_implementation() -> None:
     executor = FakeExecutor(responses_for("SPD3303X"))
     psu = SPD3000(executor)
@@ -341,6 +364,7 @@ def test_c_unsupported_features_fail_before_io() -> None:
         lambda: psu.measure.power("CH1"),
         lambda: psu.ipaddr,
         lambda: psu.network.host,
+        lambda: psu.network.settings,
         lambda: psu.timer("CH1", TimerState.ON),
         lambda: psu.output.wave("CH1", WaveformState.ON),
         lambda: psu.locked,

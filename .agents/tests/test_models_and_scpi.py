@@ -7,6 +7,7 @@ from siglent_spd3000 import (
     Capabilities,
     ChannelStatus,
     Model,
+    NetworkSettings,
     OperatingMode,
     RegulationMode,
     SPD3000ProtocolError,
@@ -43,6 +44,23 @@ def test_system_error_common_formats() -> None:
         "SIGLENT SPD3000 Series system error\n"
         "- Code: -100\n"
         "- Message: Command error"
+    )
+
+
+def test_network_settings_have_a_grouped_human_readable_summary() -> None:
+    settings = NetworkSettings(
+        host="192.168.1.50",
+        subnet_mask="255.255.255.0",
+        gateway="192.168.1.1",
+        dhcp=False,
+    )
+
+    assert str(settings) == (
+        "SIGLENT SPD3000 Series network settings\n"
+        "- IP address: 192.168.1.50\n"
+        "- Subnet mask: 255.255.255.0\n"
+        "- Gateway: 192.168.1.1\n"
+        "- DHCP: disabled"
     )
 
 

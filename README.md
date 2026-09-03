@@ -116,7 +116,7 @@ See [From a manual SCPI command to Python](#from-a-manual-scpi-command-to-python
 Every instrument-state property read performs a fresh hardware query; output state and measurements are never answered from a write cache.
 `str(psu)` instead summarizes the identity cached during connection, the normalized connection destination, and whether the local driver session is open without issuing another command.
 The reported `open` state means that `close()` has not been called; it is not an active reachability probe.
-Public identification, capability, execution-setting, status, error, SCPI-command information, and gateway-setting objects also provide readable multiline `str()` output; formatting an already obtained object performs no I/O.
+Public identification, capability, execution-setting, network-setting, status, error, SCPI-command information, and gateway-setting objects also provide readable multiline `str()` output; formatting an already obtained object performs no I/O.
 The SPD command set has no documented `OUTPut?` query, so special `psu.ch<CH_NUM>.output` properties are implemented by querying and decoding `SYSTem:STATus?`.
 For a guided end-to-end check against a real instrument, use the [Jupyter hardware test notebook](#jupyter-hardware-test-notebook); it starts with read-only checks and gates state-changing tests behind explicit user input.
 
@@ -298,6 +298,7 @@ Friendly names are additive aliases which delegate to it; they do not contain se
   - `psu.maskaddr` -> `psu.network.subnet_mask`
   - `psu.gateaddr` -> `psu.network.gateway`
   - `psu.dhcp` -> `psu.network.dhcp`
+  - `psu.network.settings` queries all four values and returns one printable `NetworkSettings` snapshot.
 
 Commands which already map cleanly need no alias; for example, `INSTrument CH1` maps directly to `psu.instrument = "CH1"`.
 
@@ -383,6 +384,7 @@ psu.ipaddr = "192.168.1.50"
 # Friendly aliases delegate to the canonical root properties above.
 psu.network.dhcp = False
 psu.network.host = "192.168.1.50"
+print(psu.network.settings)  # four fresh network queries; formatting performs no I/O
 
 psu.sav(1)
 psu.save(1)  # friendly alias for the same *SAV 1 command

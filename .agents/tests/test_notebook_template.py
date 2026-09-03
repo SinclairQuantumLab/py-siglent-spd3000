@@ -85,7 +85,7 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
         "psu.measure.voltage",
         "psu.measure.current",
         "psu.scpi.execute",
-        "psu.network.host",
+        "psu.network.settings",
         "psu.timer.set",
         "psu.output.wave",
         "psu.lock()",
@@ -104,6 +104,8 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
     assert "print(psu.settings)" in notebook_text
     assert "print(status)" in notebook_text
     assert "print(psu.system.error)" in notebook_text
+    assert "print(psu.network.settings)" in notebook_text
+    assert 'print(f\\"Front panel locked: {psu.locked}\\")' in notebook_text
     assert "asdict(" not in notebook_text
     assert "json.dumps" not in notebook_text
     assert "ENERGIZE_OUTPUT = False" in notebook_text

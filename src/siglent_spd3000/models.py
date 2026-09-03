@@ -213,6 +213,29 @@ class SystemError:
         )
 
 
+@dataclass(frozen=True)
+class NetworkSettings:
+    """One freshly queried snapshot of the instrument network configuration."""
+
+    host: str
+    subnet_mask: str
+    gateway: str
+    dhcp: bool
+
+    def __str__(self) -> str:
+        """Return all network settings in a readable multiline summary."""
+
+        return "\n".join(
+            (
+                "SIGLENT SPD3000 Series network settings",
+                f"- IP address: {self.host}",
+                f"- Subnet mask: {self.subnet_mask}",
+                f"- Gateway: {self.gateway}",
+                f"- DHCP: {'enabled' if self.dhcp else 'disabled'}",
+            )
+        )
+
+
 def _support(value: bool) -> str:
     return "supported" if value else "not supported"
 

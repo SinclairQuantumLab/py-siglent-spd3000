@@ -148,20 +148,12 @@
    "outputs": [],
    "source": [
     "if psu.capabilities.network:\n",
-    "    pprint(\n",
-    "        {\n",
-    "            \"ip_address\": psu.network.host,\n",
-    "            \"subnet_mask\": psu.network.subnet_mask,\n",
-    "            \"gateway\": psu.network.gateway,\n",
-    "            \"dhcp\": psu.network.dhcp,\n",
-    "        },\n",
-    "        sort_dicts=False,\n",
-    "    )\n",
+    "    print(psu.network.settings)\n",
     "else:\n",
     "    print(f\"Network queries are not supported by {psu.model.value}\")\n",
     "\n",
     "if psu.capabilities.lock_query:\n",
-    "    pprint({\"front_panel_locked\": psu.locked}, sort_dicts=False)\n",
+    "    print(f\"Front panel locked: {psu.locked}\")\n",
     "else:\n",
     "    print(f\"Lock-state query is not supported by {psu.model.value}\")"
    ]

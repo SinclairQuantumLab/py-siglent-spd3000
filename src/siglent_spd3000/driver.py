@@ -30,6 +30,7 @@ from .models import (
     Channel,
     ConnectionType,
     Identification,
+    NetworkSettings,
     OutputState,
     SystemError,
     SystemStatus,
@@ -442,11 +443,23 @@ class Network:
 
     The SCPI-derived ``SPD3000.ipaddr``, ``maskaddr``, ``gateaddr``, and
     ``dhcp`` properties own validation and I/O. These grouped properties only
-    delegate to them and introduce no second implementation.
+    delegate to them and introduce no second implementation. ``settings`` is
+    an additive snapshot convenience that performs all four queries.
     """
 
     def __init__(self, device: SPD3000) -> None:
         self._device = device
+
+    @property
+    def settings(self) -> NetworkSettings:
+        """Fresh snapshot built from the four documented network queries."""
+
+        return NetworkSettings(
+            host=self.host,
+            subnet_mask=self.subnet_mask,
+            gateway=self.gateway,
+            dhcp=self.dhcp,
+        )
 
     @property
     def host(self) -> str:
