@@ -30,11 +30,27 @@ def test_connection_placeholder_is_confined_to_connection_settings_cell() -> Non
     placeholder_cells = [
         cell
         for cell in notebook["cells"]
-        if "<REPLACE_WITH_CONNECTION_IDENTIFIER>" in "".join(cell["source"])
+        if "<REPLACE_WITH_IDENTIFIER>" in "".join(cell["source"])
     ]
 
     assert len(placeholder_cells) == 1
     assert "connection-settings" in placeholder_cells[0]["metadata"]["tags"]
+
+
+def test_connection_settings_are_explicit_and_transport_neutral() -> None:
+    notebook = _notebook()
+    settings_cells = [
+        cell
+        for cell in notebook["cells"]
+        if "connection-settings" in cell["metadata"].get("tags", [])
+    ]
+
+    assert len(settings_cells) == 1
+    settings = "".join(settings_cells[0]["source"])
+    assert "CONNECTION_TYPE: spd.ConnectionType | None = None" in settings
+    assert "connection=CONNECTION_TYPE" in settings
+    assert "CONNECTION = spd.ConnectionType.SOCKET" not in settings
+    assert "IDENTIFIER = \"<REPLACE_WITH_IDENTIFIER>\"" in settings
 
 
 def test_notebook_template_is_linked_and_working_copy_is_ignored() -> None:

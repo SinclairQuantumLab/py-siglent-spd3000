@@ -20,9 +20,10 @@
    "source": [
     "## 1. Connection settings\n",
     "\n",
-    "Edit only this cell to select the connection.\n",
+    "Edit only this cell to select the connection type and its identifier.\n",
+    "Set `CONNECTION_TYPE` to one of `spd.ConnectionType.SOCKET`, `spd.ConnectionType.VXI11`, `spd.ConnectionType.VISA`, or `spd.ConnectionType.GATEWAY`; the template intentionally chooses none for you.\n",
     "Use a power-supply hostname or IP address for `SOCKET` and `VXI11`, a complete enumerated VISA resource for `VISA`, or `localhost`/`host[:port]` for `GATEWAY`.\n",
-    "Set `VISA_BACKEND` to `None` for the system VISA backend, and set `GATEWAY_AUTH_FILE` to `None` only for an unauthenticated local gateway."
+    "Leave `VISA_BACKEND` as `None` to let PyVISA select an installed backend, or use `\"@py\"` to require PyVISA-py; leave `GATEWAY_AUTH_FILE` as `None` only for an unauthenticated local gateway."
    ]
   },
   {
@@ -45,13 +46,15 @@
     "\n",
     "import siglent_spd3000 as spd\n",
     "\n",
-    "CONNECTION = spd.ConnectionType.SOCKET\n",
-    "IDENTIFIER = \"<REPLACE_WITH_CONNECTION_IDENTIFIER>\"\n",
-    "VISA_BACKEND = \"@py\"\n",
+    "CONNECTION_TYPE: spd.ConnectionType | None = None\n",
+    "IDENTIFIER = \"<REPLACE_WITH_IDENTIFIER>\"\n",
+    "VISA_BACKEND: str | None = None\n",
     "GATEWAY_AUTH_FILE: str | None = None\n",
     "TIMEOUT_S = 5.0\n",
     "MIN_COMMAND_INTERVAL_MS = 100.0\n",
     "\n",
+    "if CONNECTION_TYPE is None:\n",
+    "    raise ValueError(\"Select CONNECTION_TYPE in this connection-settings cell before continuing\")\n",
     "if IDENTIFIER.startswith(\"<\"):\n",
     "    raise ValueError(\"Replace IDENTIFIER in this connection-settings cell before continuing\")\n",
     "\n",
@@ -59,20 +62,20 @@
     "    psu.close()\n",
     "\n",
     "connection_options: dict[str, object] = {}\n",
-    "if CONNECTION is spd.ConnectionType.VISA:\n",
+    "if CONNECTION_TYPE is spd.ConnectionType.VISA:\n",
     "    connection_options[\"visa_backend\"] = VISA_BACKEND\n",
-    "elif CONNECTION is spd.ConnectionType.GATEWAY and GATEWAY_AUTH_FILE is not None:\n",
+    "elif CONNECTION_TYPE is spd.ConnectionType.GATEWAY and GATEWAY_AUTH_FILE is not None:\n",
     "    connection_options[\"token\"] = spd.load_gateway_auth(GATEWAY_AUTH_FILE)\n",
     "\n",
     "psu = spd.SPD3000.connect(\n",
-    "    connection=CONNECTION,\n",
+    "    connection=CONNECTION_TYPE,\n",
     "    identifier=IDENTIFIER,\n",
     "    timeout_s=TIMEOUT_S,\n",
     "    min_command_interval_ms=MIN_COMMAND_INTERVAL_MS,\n",
     "    **connection_options,\n",
     ")\n",
     "atexit.register(psu.close)\n",
-    "print(f\"Connected to {psu.model.value} through {CONNECTION.value}: {IDENTIFIER}\")"
+    "print(f\"Connected to {psu.model.value} through {CONNECTION_TYPE.value}: {IDENTIFIER}\")"
    ]
   },
   {

@@ -491,5 +491,6 @@ python -m pip wheel . --no-deps --wheel-dir dist
 Official vendor manuals and application notes used during development are indexed in [`docs/README.md`](docs/README.md), including source URLs and file hashes.
 Hardware tests are opt-in and are not run without an attached supply.
 For a guided interactive check, copy [`test_spd300.ipynb.template`](test_spd300.ipynb.template) to `test_spd300.ipynb`, edit only its connection-settings cell, and run its documented cells in order.
+Set `CONNECTION_TYPE` to the appropriate `spd.ConnectionType` from [Connections](#connections), then set `IDENTIFIER` to the corresponding instrument address, VISA resource, or gateway endpoint; the template deliberately assumes no default connection type.
 The notebook begins with read-only checks and requires explicit confirmation before every hardware-control test.
 The ordered physical-device acceptance procedure is maintained in [`.agents/HARDWARE_TESTS.md`](.agents/HARDWARE_TESTS.md).
