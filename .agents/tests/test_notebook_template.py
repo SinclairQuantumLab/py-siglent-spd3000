@@ -63,7 +63,7 @@ def test_connection_settings_are_clear_and_connection_specific() -> None:
     assert '# visa_backend="@py"' in settings
     assert '# token=spd.load_gateway_auth("gateway-auth.toml")' in settings
     assert "raise ValueError" not in settings
-    assert 'print(f"Connected to {psu.model.value}")' in settings
+    assert "print(psu)" in settings
 
 
 def test_notebook_template_is_linked_and_working_copy_is_ignored() -> None:

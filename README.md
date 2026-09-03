@@ -92,6 +92,7 @@ Below is the basic use of this driver library, including:
 import siglent_spd3000 as spd
 
 with spd.SPD3000.connect("socket", "192.168.1.50") as psu:
+    print(psu)  # cached model, serial number, connection, and local open/closed state; no SCPI query
     print(psu.idn)  # identify the instrument; SCPI: "*IDN?"
 
     psu.ch1.voltage = 5.0  # set CH1 voltage; SCPI: "CH1:VOLTage 5.0"
@@ -108,7 +109,9 @@ with spd.SPD3000.connect("socket", "192.168.1.50") as psu:
 ```
 
 See [From a manual SCPI command to Python](#from-a-manual-scpi-command-to-python) to find and use the commands and corresponding library methods.
-Every property read performs a fresh hardware query; output state and measurements are never answered from a write cache.
+Every instrument-state property read performs a fresh hardware query; output state and measurements are never answered from a write cache.
+`str(psu)` instead summarizes the identity cached during connection, the normalized connection destination, and whether the local driver session is open without issuing another command.
+The reported `open` state means that `close()` has not been called; it is not an active reachability probe.
 The SPD command set has no documented `OUTPut?` query, so special `psu.ch<CH_NUM>.output` properties are implemented by querying and decoding `SYSTem:STATus?`.
 
 For more involved programs, the same package namespace provides connection types, enums, and execution settings.

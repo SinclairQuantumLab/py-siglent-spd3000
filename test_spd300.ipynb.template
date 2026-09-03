@@ -57,7 +57,7 @@
     "    # token=spd.load_gateway_auth(\"gateway-auth.toml\"),  # Uncomment for an authenticated gateway.\n",
     ")\n",
     "atexit.register(psu.close)\n",
-    "print(f\"Connected to {psu.model.value}\")"
+    "print(psu)"
    ]
   },
   {

@@ -511,6 +511,9 @@ class SPD3000:
 
     def __init__(self, executor: Executor) -> None:
         self._executor = executor
+        self._connection_type: ConnectionType | None = None
+        self._connection_identifier: str | None = None
+        self._closed = False
         try:
             self._session_identity = parse_identification(self._query("*IDN?"))
         except Exception:
@@ -659,6 +662,7 @@ class SPD3000:
                 SocketTransport(host, port=DEFAULT_SCPI_PORT, timeout=settings.timeout), settings
             )
         )
+        device._set_connection_metadata(ConnectionType.SOCKET, f"{host}:{DEFAULT_SCPI_PORT}")
         if not device.capabilities.socket:
             device.close()
             raise UnsupportedFeatureError(f"{device.model.value} does not support raw TCP sockets")
@@ -669,6 +673,7 @@ class SPD3000:
         """Build a driver over an SPD3303X/X-E VXI-11 connection."""
 
         device = cls(DirectExecutor(VXI11Transport(host, timeout=settings.timeout), settings))
+        device._set_connection_metadata(ConnectionType.VXI11, host)
         if not device.capabilities.vxi11:
             device.close()
             raise UnsupportedFeatureError(f"{device.model.value} does not support VXI-11")
@@ -685,7 +690,9 @@ class SPD3000:
         """Build a driver over a PyVISA resource."""
 
         transport = VisaTransport(resource, backend=backend, timeout=settings.timeout)
-        return cls(DirectExecutor(transport, settings))
+        device = cls(DirectExecutor(transport, settings))
+        device._set_connection_metadata(ConnectionType.VISA, resource)
+        return device
 
     @classmethod
     def _connect_gateway(
@@ -700,7 +707,38 @@ class SPD3000:
 
         from .gateway.client import GatewayExecutor
 
-        return cls(GatewayExecutor(host, port=port, token=token, settings=settings))
+        endpoint = f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
+        device = cls(GatewayExecutor(host, port=port, token=token, settings=settings))
+        device._set_connection_metadata(ConnectionType.GATEWAY, endpoint)
+        return device
+
+    def _set_connection_metadata(
+        self, connection_type: ConnectionType, identifier: str
+    ) -> None:
+        self._connection_type = connection_type
+        self._connection_identifier = identifier
+
+    @property
+    def connection_type(self) -> ConnectionType | None:
+        """Selected public connection type, or ``None`` for an injected executor."""
+
+        return self._connection_type
+
+    @property
+    def connection_identifier(self) -> str | None:
+        """Normalized connection destination, or ``None`` for an injected executor."""
+
+        return self._connection_identifier
+
+    @property
+    def is_open(self) -> bool:
+        """Whether this driver session has not been closed.
+
+        This local lifecycle state does not probe whether a remote peer or
+        instrument remains reachable.
+        """
+
+        return not self._closed
 
     @property
     def settings(self) -> ExecutionSettings:
@@ -846,7 +884,29 @@ class SPD3000:
         return result
 
     def close(self) -> None:
-        self._executor.close()
+        if self._closed:
+            return
+        try:
+            self._executor.close()
+        finally:
+            self._closed = True
+
+    def __str__(self) -> str:
+        """Return a concise identity and connection summary without instrument I/O."""
+
+        identity = self._session_identity
+        connection = (
+            self._connection_type.value
+            if self._connection_type is not None
+            else type(self._executor).__name__
+        )
+        if self._connection_identifier is not None:
+            connection = f"{connection} {self._connection_identifier}"
+        state = "open" if self.is_open else "closed"
+        return (
+            f"{identity.model.value} (S/N {identity.serial_number}); "
+            f"connection={connection}; state={state}"
+        )
 
     def __enter__(self) -> SPD3000:
         return self

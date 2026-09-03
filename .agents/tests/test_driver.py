@@ -138,6 +138,36 @@ def test_backend_connection_helpers_are_not_public_constructors() -> None:
         assert not hasattr(SPD3000, name)
 
 
+def test_string_summary_uses_cached_identity_and_local_connection_state() -> None:
+    executor = FakeExecutor(responses_for("SPD3303X"))
+    psu = SPD3000(executor)
+    psu._set_connection_metadata(ConnectionType.SOCKET, "192.168.1.50:5025")
+
+    assert str(psu) == (
+        "SPD3303X (S/N SPD0001); "
+        "connection=socket 192.168.1.50:5025; state=open"
+    )
+    assert psu.connection_type is ConnectionType.SOCKET
+    assert psu.connection_identifier == "192.168.1.50:5025"
+    assert psu.is_open is True
+    assert executor.commands == ["*IDN?"]
+
+    psu.close()
+
+    assert str(psu).endswith("state=closed")
+    assert psu.is_open is False
+    assert executor.commands == ["*IDN?"]
+
+
+def test_string_summary_names_an_injected_executor() -> None:
+    executor = FakeExecutor(responses_for("SPD3303C"))
+    psu = SPD3000(executor)
+
+    assert str(psu) == "SPD3303C (S/N SPD0001); connection=FakeExecutor; state=open"
+    assert psu.connection_type is None
+    assert psu.connection_identifier is None
+
+
 def test_output_command_and_channel_convenience_share_one_write_path() -> None:
     executor = FakeExecutor(responses_for("SPD3303X", **{"SYST:STAT?": ["0x0030", "0x0000"]}))
     psu = SPD3000(executor)
