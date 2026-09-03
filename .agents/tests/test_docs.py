@@ -173,10 +173,9 @@ def test_jupyter_hardware_test_guide_covers_setup_inputs_and_confirmations() -> 
 
     for required in (
         "test_spd300.ipynb.template",
-        "Copy-Item test_spd300.ipynb.template test_spd300.ipynb",
-        "cp -n test_spd300.ipynb.template test_spd300.ipynb",
-        "python -m pip install jupyterlab",
-        "uv run --with jupyterlab jupyter lab test_spd300.ipynb",
+        "cp test_spd300.ipynb.template test_spd300.ipynb",
+        "Visual Studio Code",
+        "Select Kernel",
         "spd.ConnectionType.<TYPE>",
         '"<IDENTIFIER>"',
         'visa_backend="@py"',
@@ -190,6 +189,11 @@ def test_jupyter_hardware_test_guide_covers_setup_inputs_and_confirmations() -> 
         ".agents/HARDWARE_TESTS.md",
     ):
         assert required in guide
+
+    assert "python -m pip install jupyterlab" not in guide
+    assert "Copy-Item" not in guide
+    assert "Linux or macOS" not in guide
+    assert "Windows PowerShell" not in guide
 
 
 def test_connection_guide_covers_every_public_connection_type() -> None:

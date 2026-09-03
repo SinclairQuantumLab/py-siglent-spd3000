@@ -197,34 +197,17 @@ Read-only cells come first, and potentially state-changing cells show their plan
 
 ### Start the notebook
 
-Install this project with the extra required by the selected [connection](#connections), activate that Python environment, and install [JupyterLab](https://jupyter.org/install) into the same environment:
-
-```bash
-python -m pip install jupyterlab
-```
+Install this project with the extra required by the selected [connection](#connections) and open the repository folder in Visual Studio Code.
+The project environment already includes the Python kernel support needed by the notebook.
 
 Copy the template so connection details and saved outputs remain in the ignored working copy rather than entering Git history.
 If `test_spd300.ipynb` already exists, open that file and skip the copy command so its connection values and test record are not overwritten.
 
-Windows PowerShell:
-
-```powershell
-Copy-Item test_spd300.ipynb.template test_spd300.ipynb
-jupyter lab test_spd300.ipynb
+```console
+cp test_spd300.ipynb.template test_spd300.ipynb
 ```
 
-Linux or macOS:
-
-```bash
-cp -n test_spd300.ipynb.template test_spd300.ipynb
-jupyter lab test_spd300.ipynb
-```
-
-Select the kernel belonging to that same environment and run the cells in order.
-
-> **NOTE:** `uv` is optional.
-> From the repository root, `uv run --with jupyterlab jupyter lab test_spd300.ipynb` starts JupyterLab for a raw-socket test without adding JupyterLab as a runtime dependency.
-> Use `uv run --extra driver --with jupyterlab jupyter lab test_spd300.ipynb` for a direct VISA or VXI-11 test, or replace `driver` with `gateway` for a gateway connection.
+Open `test_spd300.ipynb` in Visual Studio Code, use **Select Kernel** to choose the Python environment where this project is installed, and run the cells in order.
 
 ### Required connection inputs
 
