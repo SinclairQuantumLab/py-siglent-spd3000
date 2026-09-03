@@ -52,6 +52,7 @@ def test_connection_settings_are_clear_and_connection_specific() -> None:
     assert 'identifier="<IDENTIFIER>",  # e.g., instrument IP, VISA resource' in settings
     assert "timeout_s=5.0,  # communication timeout in seconds" in settings
     assert "min_command_interval_ms=100.0,  # delay between instrument commands" in settings
+    assert "verify_write=False,  # True adds an automatic readback" in settings
     assert "CONNECTION_TYPE =" not in settings
     assert "IDENTIFIER =" not in settings
     assert "TIMEOUT_S =" not in settings
@@ -86,7 +87,7 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
         "psu.network.settings",
         "psu.timer.set",
         "psu.output.wave",
-        "with psu.batch_write, psu.verify:",
+        "with psu.batch_write, psu.verify_write:",
         "with psu.batch_write:",
         "psu.lock()",
         "psu.close()",

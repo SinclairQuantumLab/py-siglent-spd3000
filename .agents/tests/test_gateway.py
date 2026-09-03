@@ -97,7 +97,7 @@ def test_semantic_verified_batch_reaches_gateway_as_one_batch() -> None:
             )
         ) as psu,
         psu.batch_write,
-        psu.verify,
+        psu.verify_write,
     ):
         psu.ch1.voltage = 5.0
         psu.ch1.current = 0.5

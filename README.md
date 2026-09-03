@@ -387,10 +387,27 @@ with psu.batch_write:
 
 Queries inside `with psu.batch_write:` are rejected so a result cannot be accidentally requested from a deferred write-only block.
 
-Use `psu.verify` when each semantic write must be followed by its documented readback and checked against the requested value:
+Write verification is disabled by default.
+Pass `verify_write=True` to the constructor or `connect()` to verify every supported semantic write:
 
 ```python
-with psu.verify:
+with spd.SPD3000.connect(
+    spd.ConnectionType.SOCKET,
+    "192.168.1.50",
+    verify_write=True,
+) as psu:
+    psu.ch1.voltage = 5.0
+
+    psu.verify_write = False
+    psu.ch1.current = 0.5
+```
+
+`psu.verify_write` is a settable property backed by a reusable context control.
+Read its global state with `psu.verify_write.enabled` or `bool(psu.verify_write)`.
+Use `with psu.verify_write:` to enable verification only within one scope, regardless of the global setting:
+
+```python
+with psu.verify_write:
     psu.ch1.voltage = 5.0
 ```
 
@@ -398,7 +415,7 @@ Without `psu.batch_write`, each setter executes its own non-interleaved write/qu
 The two contexts compose, so several verified settings can travel as one write batch:
 
 ```python
-with psu.batch_write, psu.verify:
+with psu.batch_write, psu.verify_write:
     psu.ch1.voltage = 5.0
     psu.ch1.current = 0.5
     psu.ch1.output = True
@@ -410,7 +427,7 @@ The exception exposes `command`, `query`, `expected`, and `actual`; the original
 
 ```python
 try:
-    with psu.verify:
+    with psu.verify_write:
         psu.ch3.output = True
 except spd.SPD3000VerificationError as exc:
     print(exc.command)   # "OUTP CH3,ON" was sent

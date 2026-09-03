@@ -159,8 +159,11 @@ def test_batching_and_verification_are_documented_as_separate_contexts() -> None
 
     assert "@psu.batch" in guide
     assert "with psu.batch_write:" in guide
-    assert "with psu.verify:" in guide
-    assert "with psu.batch_write, psu.verify:" in guide
+    assert "with psu.verify_write:" in guide
+    assert "with psu.batch_write, psu.verify_write:" in guide
+    assert "verify_write=True" in guide
+    assert "psu.verify_write = False" in guide
+    assert "psu.verify_write.enabled" in guide
     assert "internally deferred" in guide
     assert 'print(values["voltage"])  # float' in guide
     assert "Raw `psu.scpi.query()` can also be collected" in guide
