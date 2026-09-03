@@ -112,6 +112,7 @@ See [From a manual SCPI command to Python](#from-a-manual-scpi-command-to-python
 Every instrument-state property read performs a fresh hardware query; output state and measurements are never answered from a write cache.
 `str(psu)` instead summarizes the identity cached during connection, the normalized connection destination, and whether the local driver session is open without issuing another command.
 The reported `open` state means that `close()` has not been called; it is not an active reachability probe.
+Public identification, capability, execution-setting, status, error, SCPI-command information, and gateway-setting objects also provide readable multiline `str()` output; formatting an already obtained object performs no I/O.
 The SPD command set has no documented `OUTPut?` query, so special `psu.ch<CH_NUM>.output` properties are implemented by querying and decoding `SYSTem:STATus?`.
 
 For more involved programs, the same package namespace provides connection types, enums, and execution settings.
