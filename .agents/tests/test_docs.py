@@ -144,7 +144,8 @@ def test_readme_has_table_of_contents_for_major_sections() -> None:
         "#from-a-manual-scpi-command-to-python",
         "#intentional-output-convenience-exception",
         "#scpi-shaped-api",
-        "#batching-and-verification",
+        "#batching",
+        "#write-verification",
         "#timing",
         "#gateway-server",
         "#model-differences",
@@ -153,26 +154,35 @@ def test_readme_has_table_of_contents_for_major_sections() -> None:
         assert f"]({anchor})" in contents
 
 
-def test_batching_and_verification_are_documented_as_separate_contexts() -> None:
+def test_batching_and_write_verification_have_separate_device_motivated_sections() -> None:
     readme = (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
-    guide = readme.split("## Batching and verification", 1)[1].split("## Timing", 1)[0]
+    batching = readme.split("## Batching", 1)[1].split("## Write verification", 1)[0]
+    verification = readme.split("## Write verification", 1)[1].split("## Timing", 1)[0]
 
-    assert "@psu.batch" in guide
-    assert "with psu.batch():" in guide
-    assert "with psu.batch() as responses:" in guide
-    assert "voltage, measured_current = responses" in guide
-    assert "with psu.verify_writes():" in guide
-    assert "with psu.verify_writes(False):" in guide
-    assert "with psu.batch(), psu.verify_writes():" in guide
-    assert "verify_writes_globally=True" in guide
-    assert "psu.verify_writes_globally = False" in guide
-    assert "ordinary bool property" in guide
-    assert 'print(values["voltage"])  # float' in guide
-    assert "automatic verification readbacks are omitted" in guide
-    assert "Raw `psu.scpi.query()` can also be collected" in guide
-    assert "SPD3000VerificationError" in guide
-    assert "never imply rollback" in guide
-    assert "applied first and then reported as unverifiable" in guide
+    assert "deliberate spacing between commands" in batching
+    assert "multiple clients" in batching
+    assert "first-class feature" in batching
+    assert "ordering and non-interleaving, not rollback" in batching
+    assert "@psu.batch" in batching
+    assert "with psu.batch():" in batching
+    assert "with psu.batch() as responses:" in batching
+    assert "voltage, measured_current = responses" in batching
+    assert 'print(values["voltage"])  # float' in batching
+    assert "automatic verification readbacks are omitted" in batching
+    assert "Raw `psu.scpi.query()` can also be collected" in batching
+
+    assert "setting commands return no value" in verification
+    assert "does not by itself prove" in verification
+    assert "additional commands and time" in verification
+    assert "with psu.verify_writes():" in verification
+    assert "with psu.verify_writes(False):" in verification
+    assert "with psu.batch(), psu.verify_writes():" in verification
+    assert "verify_writes_globally=True" in verification
+    assert "psu.verify_writes_globally = False" in verification
+    assert "ordinary bool property" in verification
+    assert "SPD3000VerificationError" in verification
+    assert "never imply rollback" in verification
+    assert "applied first and then reported as unverifiable" in verification
 
 
 def test_jupyter_hardware_test_guide_is_a_concise_pitch_and_launch_path() -> None:

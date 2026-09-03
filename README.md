@@ -20,7 +20,8 @@ Connecting through the [gateway server](#gateway-server) is the recommended way 
   - [2. Confirm the mapping with the helper](#2-confirm-the-mapping-with-the-helper)
   - [Intentional `OUTPut` convenience exception](#intentional-output-convenience-exception)
 - [SCPI-shaped API](#scpi-shaped-api)
-- [Batching and verification](#batching-and-verification)
+- [Batching](#batching)
+- [Write verification](#write-verification)
 - [Timing](#timing)
 - [Gateway server](#gateway-server)
   - [Install](#install)
@@ -114,7 +115,8 @@ with spd.SPD3000.connect("socket", "192.168.1.50") as psu:
 ```
 
 See [From a manual SCPI command to Python](#from-a-manual-scpi-command-to-python) to find and use the commands and corresponding library methods.
-See [Batching and verification](#batching-and-verification) when several operations must execute without interleaving or their resulting state must be read back automatically.
+See [Batching](#batching) when related commands must execute without another gateway client's commands appearing between them.
+See [Write verification](#write-verification) when a setting must be queried and checked after it is written.
 Every instrument-state property read performs a fresh hardware query; output state and measurements are never answered from a write cache.
 `str(psu)` instead summarizes the identity cached during connection, the normalized connection destination, and whether the local driver session is open without issuing another command.
 The reported `open` state means that `close()` has not been called; it is not an active reachability probe.
@@ -351,9 +353,13 @@ Setting a static address does not silently disable DHCP.
 
 Use `lookup_command("MEAS:VOLT?")` to discover the corresponding Python path, or use `psu.scpi.write()`, `query()`, and `execute()` as an explicit low-level escape hatch.
 
-## Batching and verification
+## Batching
 
 Ordinary setters execute immediately and do not perform an implicit readback.
+The SPD3000 requires deliberate spacing between commands, and a gateway may be serving multiple clients through the same physical connection.
+Batching is therefore a first-class feature: it keeps one logical sequence non-interleaved while the physical connection owner continues to enforce the required command interval.
+Use it for related setpoint changes, configuration sequences, or groups of measurements that must remain together.
+
 Use `psu.batch()` to collect semantic writes and queries and execute them as one non-interleaved batch.
 A write-only batch needs no separate API:
 
@@ -393,6 +399,15 @@ values = configure_and_read()
 print(values["voltage"])  # float
 print(values["measured"])  # float
 ```
+
+Batching guarantees ordering and non-interleaving, not rollback: writes completed before a later command fails may remain applied.
+Raw `psu.scpi.query()` can also be collected inside `psu.batch()` or an `@psu.batch` function.
+
+## Write verification
+
+Most SPD3000 setting commands return no value, so a successfully transmitted write does not by itself prove that the instrument accepted the requested state.
+Write verification appends the documented query, parses its response, and compares it with the requested value.
+This costs additional commands and time, and a few writes have no corresponding query, so verification remains an explicit choice rather than an implicit setter behavior.
 
 Write verification is disabled by default.
 Pass `verify_writes_globally=True` to the constructor or `connect()` to verify every supported semantic write:
@@ -446,7 +461,6 @@ except spd.SPD3000VerificationError as exc:
 
 Verification errors never imply rollback.
 In particular, an unqueryable setting such as CH3 output is applied first and then reported as unverifiable, and writes completed before a later batch failure may remain applied.
-Raw `psu.scpi.query()` can also be collected inside `psu.batch()` or an `@psu.batch` function.
 The already-assembled `psu.scpi.execute()` escape hatch cannot be nested inside a batch or verification scope because it owns a separate immediate batch.
 
 ## Timing
