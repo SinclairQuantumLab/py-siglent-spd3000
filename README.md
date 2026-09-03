@@ -370,16 +370,16 @@ Use `as responses` to receive the parsed results of user-issued queries in sourc
 
 ```python
 with psu.batch() as responses:
-    psu.ch1.voltage
-    psu.measure.current(spd.Channel.CH1)
+    _ = psu.ch1.voltage
+    _ = psu.measure.current(spd.Channel.CH1)
 
 voltage, measured_current = responses
 ```
 
-`responses` contains only explicit user-query results; writes and automatic verification readbacks are omitted.
-Results are unavailable inside the block and become ordinary parsed Python values when it exits successfully.
-If the block raises, its collected operations are discarded without being sent.
-Execution and response-parsing failures are raised when the block exits.
+`responses` is an ordinary list.
+It is empty while the block body runs and is extended with the ordinary parsed results of explicit user queries when the batch exits successfully; writes and automatic verification readbacks are omitted.
+If the block body raises, its collected operations are discarded without being sent and the driver adds nothing to the list.
+Execution, response-parsing, and verification failures are raised when the block exits, before the driver adds query results to the list.
 
 `@psu.batch` is a convenience wrapper around the same `psu.batch()` context and unwraps Deferred values in the decorated function's returned built-in containers:
 

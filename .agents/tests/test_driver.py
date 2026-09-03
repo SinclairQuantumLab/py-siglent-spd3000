@@ -5,7 +5,6 @@ import pytest
 import siglent_spd3000 as spd
 from siglent_spd3000 import (
     SPD3000,
-    BatchResponses,
     Channel,
     ConnectionType,
     Deferred,
@@ -518,13 +517,11 @@ def test_batch_context_collects_semantic_writes_and_executes_once_on_exit() -> N
         psu.ch1.current = 0.5
         psu.ch1.output = True
         assert executor.commands == ["*IDN?"]
-        assert responses.done is False
-        with pytest.raises(SPD3000DeferredResultError, match="pending"):
-            _ = responses[:]
+        assert isinstance(responses, list)
+        assert responses == []
 
     assert executor.batches[-1] == ["CH1:VOLT 5", "CH1:CURR 0.5", "OUTP CH1,ON"]
-    assert responses.done is True
-    assert responses[:] == ()
+    assert responses == []
 
 
 def test_batch_context_returns_parsed_user_queries_in_source_order() -> None:
@@ -545,9 +542,8 @@ def test_batch_context_returns_parsed_user_queries_in_source_order() -> None:
         _ = psu.measure.current(Channel.CH1)
         _ = psu.ch1.output
 
-    assert isinstance(responses, BatchResponses)
-    assert repr(responses) == "BatchResponses(values=(5.0, 0.125, True))"
-    assert responses.values == (5.0, 0.125, True)
+    assert isinstance(responses, list)
+    assert responses == [5.0, 0.125, True]
     voltage, current, output = responses
     assert (voltage, current, output) == (5.0, 0.125, True)
 
@@ -575,7 +571,7 @@ def test_batch_discards_pending_operations_when_body_raises() -> None:
         _ = captured[0].value
 
 
-def test_batch_context_cancels_responses_when_body_raises() -> None:
+def test_batch_context_leaves_response_list_empty_when_body_raises() -> None:
     executor = FakeExecutor(responses_for("SPD3303X", **{"CH1:VOLT?": ["5"]}))
     psu = SPD3000(executor)
 
@@ -584,9 +580,20 @@ def test_batch_context_cancels_responses_when_body_raises() -> None:
         raise RuntimeError("stop")
 
     assert executor.commands == ["*IDN?"]
-    assert responses.done is True
-    with pytest.raises(SPD3000DeferredResultError, match="cancelled"):
-        _ = responses.values
+    assert responses == []
+
+
+def test_batch_context_leaves_response_list_empty_when_query_parsing_fails() -> None:
+    executor = FakeExecutor(responses_for("SPD3303X", **{"CH1:VOLT?": ["invalid"]}))
+    psu = SPD3000(executor)
+
+    with (
+        pytest.raises(SPD3000ProtocolError, match="Malformed VOLT"),
+        psu.batch() as responses,
+    ):
+        _ = psu.ch1.voltage
+
+    assert responses == []
 
 
 def test_batch_decorator_executes_mixed_operations_and_unwraps_return_value() -> None:
@@ -830,7 +837,7 @@ def test_batch_and_verify_writes_compose_into_one_non_interleaved_batch() -> Non
         "SYST:STAT?",
         "MEAS:VOLT? CH1",
     ]
-    assert responses[:] == (4.9,)
+    assert responses == [4.9]
 
 
 def test_verify_mismatch_raises_structured_verification_error_after_write() -> None:

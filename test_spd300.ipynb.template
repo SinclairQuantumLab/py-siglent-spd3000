@@ -240,7 +240,7 @@
     "## 8. Batch execution\n",
     "\n",
     "Batch execution postpones I/O until the context or decorated function exits and sends the collected commands as one non-interleaved sequence.\n",
-    "`responses` is pending inside the block and afterward contains only explicit user-query results in source order; writes and automatic verification readbacks are omitted.\n",
+    "`responses` is an ordinary list that stays empty inside the block and is extended on successful exit with only explicit user-query results in source order; writes and automatic verification readbacks are omitted.\n",
     "Batching guarantees ordering and non-interleaving, not rollback."
    ]
   },
@@ -250,8 +250,8 @@
    "source": [
     "### 8.1 Context manager and responses\n",
     "\n",
-    "Setters add writes, while property reads and query methods add parsed results to `responses`.\n",
-    "After the context exits, `responses` supports `.values`, indexing, iteration, and unpacking."
+    "Setters add writes, while property reads and query methods add parsed results to `responses` when the context exits.\n",
+    "Because `responses` is a normal list, it supports indexing, iteration, slicing, and unpacking."
    ]
   },
   {
@@ -268,8 +268,8 @@
     "    _ = psu.ch1.current\n",
     "    _ = psu.ch1.output\n",
     "\n",
+    "print(type(responses))\n",
     "print(responses)\n",
-    "print(responses.values)\n",
     "ch1_voltage, ch1_current_limit, ch1_output = responses\n",
     "print(ch1_voltage, ch1_current_limit, ch1_output)"
    ]
@@ -295,8 +295,7 @@
     "    return psu.ch1.voltage, psu.measure.voltage(spd.Channel.CH1)\n",
     "\n",
     "ch1_set_voltage, ch1_measured_voltage = configure_and_read()\n",
-    "print(ch1_set_voltage)\n",
-    "print(ch1_measured_voltage)"
+    "print(ch1_set_voltage, ch1_measured_voltage)"
    ]
   },
   {

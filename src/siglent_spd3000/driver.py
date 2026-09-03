@@ -21,7 +21,6 @@ from .exceptions import (
     UnsupportedFeatureError,
 )
 from .execution import (
-    BatchResponses,
     BatchResult,
     Command,
     CommandBatch,
@@ -269,13 +268,13 @@ def _unwrap_batch_return(value: object) -> object:
 
 
 class _BatchContext:
-    """Collect writes and user queries for one execution."""
+    """Collect one execution and populate a returned list with user-query results."""
 
     def __init__(self, device: SPD3000) -> None:
         self._device = device
-        self._responses = BatchResponses()
+        self._responses: list[object] = []
 
-    def __enter__(self) -> BatchResponses:
+    def __enter__(self) -> list[object]:
         self._device._begin_batch(self._responses)
         return self._responses
 
@@ -764,9 +763,10 @@ class RawSCPI:
 class SPD3000:
     """Semantic SPD3303X/X-E/C driver over an injected command executor.
 
-    ``batch()`` collects writes and queries for one non-interleaved execution;
-    ``batch`` also decorates a function by wrapping it in that context and
-    unwrapping Deferred values in its return value. ``verify_writes()``
+    ``batch()`` collects writes and queries for one non-interleaved execution
+    and populates its returned list with parsed user-query results. ``batch``
+    also decorates a function by wrapping it in that context and unwrapping
+    Deferred values in its return value. ``verify_writes()``
     temporarily overrides the ``verify_writes_globally`` property and adds
     supported readbacks that can raise
     :class:`SPD3000VerificationError` when a completed write cannot be verified.
@@ -785,7 +785,7 @@ class SPD3000:
         self._operation_lock = threading.RLock()
         self._batch_active = False
         self._pending_operations: list[_PendingOperation] = []
-        self._batch_responses: BatchResponses | None = None
+        self._batch_responses: list[object] | None = None
         self._batch_response_deferreds: list[Deferred[object]] = []
         self._verify_writes_globally = verify_writes_globally
         self._verify_writes_overrides: list[bool] = []
@@ -1316,7 +1316,7 @@ class SPD3000:
             self._execute_pending_operations([cast(_PendingRead[object], pending)])
             return deferred.value
 
-    def _begin_batch(self, responses: BatchResponses) -> None:
+    def _begin_batch(self, responses: list[object]) -> None:
         self._operation_lock.acquire()
         if self._batch_active:
             self._operation_lock.release()
@@ -1339,18 +1339,11 @@ class SPD3000:
                 for operation in pending:
                     if isinstance(operation, _PendingRead):
                         operation.deferred._cancel()
-                if responses is not None:
-                    responses._cancel()
                 return
-            try:
-                if pending:
-                    self._execute_pending_operations(pending)
-                if responses is not None:
-                    responses._resolve([deferred.value for deferred in deferreds])
-            except BaseException as exc:
-                if responses is not None:
-                    responses._reject(exc)
-                raise
+            if pending:
+                self._execute_pending_operations(pending)
+            if responses is not None:
+                responses.extend(deferred.value for deferred in deferreds)
         finally:
             self._operation_lock.release()
 

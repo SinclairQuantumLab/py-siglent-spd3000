@@ -155,6 +155,7 @@ def test_notebook_orders_control_verification_batching_and_diagnostics() -> None
     assert "psu.ch1.current = current_limit" in notebook_text
     assert "psu.ch1.output = current_output" in notebook_text
     batch_overview = sections["## 8. Batch execution"]
+    assert "ordinary list that stays empty inside the block" in batch_overview
     assert "only explicit user-query results in source order" in batch_overview
     assert "writes and automatic verification readbacks are omitted" in batch_overview
     assert "not rollback" in batch_overview
@@ -174,7 +175,9 @@ def test_notebook_orders_control_verification_batching_and_diagnostics() -> None
 
     context_example = batch_examples["### 8.1 Context manager and responses"]
     assert "with psu.batch() as responses:" in context_example
-    assert "print(responses.values)" in context_example
+    assert "print(type(responses))" in context_example
+    assert "print(responses)" in context_example
+    assert "responses.values" not in context_example
     assert "ch1_voltage, ch1_current_limit, ch1_output = responses" in context_example
 
     decorator_example = batch_examples["### 8.2 Decorator"]
