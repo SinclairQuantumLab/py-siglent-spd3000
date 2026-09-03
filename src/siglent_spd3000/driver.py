@@ -904,7 +904,7 @@ class SPD3000:
         state = "open" if self.is_open else "closed"
         return "\n".join(
             (
-                "SIGLENT SPD3000 power supply",
+                "SIGLENT SPD3000 power supply driver instance",
                 f"- Model: {identity.model.value}",
                 f"- Serial number: {identity.serial_number}",
                 "- Connection:",
