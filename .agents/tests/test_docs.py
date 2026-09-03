@@ -149,3 +149,4 @@ def test_connection_guide_covers_every_public_connection_type() -> None:
     assert "USB0::0x0483::0x7540::<SERIAL_NUMBER>::INSTR" in connections
     assert "TCPIP0::<INSTRUMENT_HOST>::inst0::INSTR" in connections
     assert "list_resources()" in connections
+    assert '`"localhost"` when the client and gateway run on the same computer' in connections

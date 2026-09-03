@@ -139,7 +139,7 @@ Enum members such as `spd.ConnectionType.SOCKET` are recommended, while their lo
 | `spd.ConnectionType.SOCKET` or `"socket"` | Ethernet using raw SCPI over TCP 5025 | Power supply hostname or IP address, such as `"192.168.1.50"` | SPD3303X/X-E; base package |
 | `spd.ConnectionType.VXI11` or `"vxi11"` | Ethernet using VXI-11 directly through `python-vxi11` | Power supply hostname or IP address | SPD3303X/X-E; `driver` extra |
 | `spd.ConnectionType.VISA` or `"visa"` | USBTMC over USB, or a VISA-managed Ethernet connection such as VXI-11 | Complete VISA resource reported on that computer | All models over USB; SPD3303X/X-E over Ethernet when supported by the selected VISA backend; `driver` extra |
-| `spd.ConnectionType.GATEWAY` or `"gateway"` | This package's gateway protocol over TCP, with the gateway owning the physical connection | Gateway computer hostname or IP address, not the power supply address | All supported models through a suitably connected gateway; `gateway` extra |
+| `spd.ConnectionType.GATEWAY` or `"gateway"` | This package's gateway protocol over TCP, with the gateway owning the physical connection | `"localhost"` when the client and gateway run on the same computer; otherwise the gateway computer's hostname or IP address, such as `"192.168.50.20"`; never the power supply address | All supported models through a suitably connected gateway; `gateway` extra |
 
 Ordinary raw socket connections always use the instrument's documented TCP port 5025, while gateway connections use port 8765 by default.
 See [Gateway server](#gateway-server) for gateway configuration, authentication, and firewall requirements.
