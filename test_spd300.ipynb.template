@@ -1,0 +1,516 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# SPD3000 guided hardware test\n",
+    "\n",
+    "Copy this file to `test_spd300.ipynb`, select the Python environment containing this checkout, and run the cells in order.\n",
+    "The notebook imports the installed `siglent_spd3000` package, so its results exercise the actual driver implementation rather than a duplicate test script.\n",
+    "Read-only cells come first.\n",
+    "Later cells that can change instrument state are disabled by default, show their plan, and require an exact confirmation phrase.\n",
+    "Disconnect sensitive DUTs, use a correctly rated load or meter, keep the front panel accessible, and stop immediately if an output cannot be disabled.\n",
+    "The complete acceptance procedure remains in [`.agents/HARDWARE_TESTS.md`](.agents/HARDWARE_TESTS.md)."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1. Connection settings\n",
+    "\n",
+    "Edit only this cell to select the connection.\n",
+    "Use a power-supply hostname or IP address for `SOCKET` and `VXI11`, a complete enumerated VISA resource for `VISA`, or `localhost`/`host[:port]` for `GATEWAY`.\n",
+    "Set `VISA_BACKEND` to `None` for the system VISA backend, and set `GATEWAY_AUTH_FILE` to `None` only for an unauthenticated local gateway."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "tags": [
+     "connection-settings"
+    ]
+   },
+   "outputs": [],
+   "source": [
+    "from __future__ import annotations\n",
+    "\n",
+    "import atexit\n",
+    "import json\n",
+    "from dataclasses import asdict\n",
+    "from decimal import Decimal\n",
+    "from time import monotonic, sleep\n",
+    "\n",
+    "import siglent_spd3000 as spd\n",
+    "\n",
+    "CONNECTION = spd.ConnectionType.SOCKET\n",
+    "IDENTIFIER = \"<REPLACE_WITH_CONNECTION_IDENTIFIER>\"\n",
+    "VISA_BACKEND = \"@py\"\n",
+    "GATEWAY_AUTH_FILE: str | None = None\n",
+    "TIMEOUT_S = 5.0\n",
+    "MIN_COMMAND_INTERVAL_MS = 100.0\n",
+    "\n",
+    "if IDENTIFIER.startswith(\"<\"):\n",
+    "    raise ValueError(\"Replace IDENTIFIER in this connection-settings cell before continuing\")\n",
+    "\n",
+    "if \"psu\" in globals():\n",
+    "    psu.close()\n",
+    "\n",
+    "connection_options: dict[str, object] = {}\n",
+    "if CONNECTION is spd.ConnectionType.VISA:\n",
+    "    connection_options[\"visa_backend\"] = VISA_BACKEND\n",
+    "elif CONNECTION is spd.ConnectionType.GATEWAY and GATEWAY_AUTH_FILE is not None:\n",
+    "    connection_options[\"token\"] = spd.load_gateway_auth(GATEWAY_AUTH_FILE)\n",
+    "\n",
+    "psu = spd.SPD3000.connect(\n",
+    "    connection=CONNECTION,\n",
+    "    identifier=IDENTIFIER,\n",
+    "    timeout_s=TIMEOUT_S,\n",
+    "    min_command_interval_ms=MIN_COMMAND_INTERVAL_MS,\n",
+    "    **connection_options,\n",
+    ")\n",
+    "atexit.register(psu.close)\n",
+    "print(f\"Connected to {psu.model.value} through {CONNECTION.value}: {IDENTIFIER}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2. Identity, capabilities, and execution settings\n",
+    "\n",
+    "This cell performs fresh identity queries and prints the parsed model information, feature flags, timeout, and command interval."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "identity = psu.idn\n",
+    "print(json.dumps(asdict(identity), indent=2, default=str))\n",
+    "print(json.dumps(asdict(psu.capabilities), indent=2, default=str))\n",
+    "print(\n",
+    "    {\n",
+    "        \"timeout_s\": psu.settings.timeout,\n",
+    "        \"min_command_interval_ms\": psu.settings.min_command_interval * 1000.0,\n",
+    "    }\n",
+    ")\n",
+    "assert identity.model is psu.model\n",
+    "assert identity.raw == psu.scpi.query(\"*IDN?\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3. Decoded system status\n",
+    "\n",
+    "`SYSTem:STATus?` is decoded into a typed immutable result containing the operating mode and CH1/CH2 regulation, output, timer, and waveform state."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "status = psu.system.status\n",
+    "print(json.dumps(asdict(status), indent=2, default=str))\n",
+    "print(f\"System version: {psu.system.version}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4. CH1 and CH2 read-only checks\n",
+    "\n",
+    "This cell compares programmed voltage/current properties with live measurements.\n",
+    "Power is queried only on models that advertise that capability."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "for channel, source in ((spd.Channel.CH1, psu.ch1), (spd.Channel.CH2, psu.ch2)):\n",
+    "    values = {\n",
+    "        \"channel\": channel.value,\n",
+    "        \"voltage_setpoint_v\": source.voltage,\n",
+    "        \"current_setpoint_a\": source.current,\n",
+    "        \"output\": source.output,\n",
+    "        \"measured_voltage_v\": psu.measure.voltage(channel),\n",
+    "        \"measured_current_a\": psu.measure.current(channel),\n",
+    "    }\n",
+    "    if psu.capabilities.measure_power:\n",
+    "        values[\"measured_power_w\"] = psu.measure.power(channel)\n",
+    "    print(json.dumps(values, indent=2))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 5. Model-specific read-only checks\n",
+    "\n",
+    "Network settings and front-panel lock state are queried only when the detected model supports those queries."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "if psu.capabilities.network:\n",
+    "    print(\n",
+    "        {\n",
+    "            \"ip_address\": psu.network.host,\n",
+    "            \"subnet_mask\": psu.network.subnet_mask,\n",
+    "            \"gateway\": psu.network.gateway,\n",
+    "            \"dhcp\": psu.network.dhcp,\n",
+    "        }\n",
+    "    )\n",
+    "else:\n",
+    "    print(f\"Network queries are not supported by {psu.model.value}\")\n",
+    "\n",
+    "if psu.capabilities.lock_query:\n",
+    "    print({\"front_panel_locked\": psu.locked})\n",
+    "else:\n",
+    "    print(f\"Lock-state query is not supported by {psu.model.value}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 6. Repeated-query stability\n",
+    "\n",
+    "Repeated identity and status reads help reveal stale, truncated, or mistimed responses without changing hardware settings."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "READ_ITERATIONS = 10\n",
+    "started = monotonic()\n",
+    "for iteration in range(1, READ_ITERATIONS + 1):\n",
+    "    assert psu.idn.model is psu.model\n",
+    "    current_status = psu.system.status\n",
+    "    print(\n",
+    "        f\"{iteration:03d}: status=0x{current_status.raw:04X}, \"\n",
+    "        f\"mode={current_status.operating_mode.value}\"\n",
+    "    )\n",
+    "print(f\"Completed {READ_ITERATIONS} iterations in {monotonic() - started:.2f} s\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 7. Read-only serialized batch\n",
+    "\n",
+    "This exercises the public raw-SCPI batch path and, when connected through the gateway, verifies that the two queries are submitted as one non-interleaved batch."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "batch = psu.scpi.execute([spd.Query(\"*IDN?\"), spd.Query(\"SYST:STAT?\")])\n",
+    "print(batch.values)\n",
+    "assert len(batch.values) == 2\n",
+    "assert all(isinstance(value, str) for value in batch.values)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 8. Optional error-queue read\n",
+    "\n",
+    "Reading `psu.system.error` removes one entry from the instrument error queue, so this diagnostic is opt-in even though it sends no write command."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "READ_ONE_ERROR_QUEUE_ENTRY = False\n",
+    "if READ_ONE_ERROR_QUEUE_ENTRY:\n",
+    "    print(asdict(psu.system.error))\n",
+    "else:\n",
+    "    print(\"Skipped; set READ_ONE_ERROR_QUEUE_ENTRY = True to consume one entry\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 9. Confirmed CH1/CH2 setting and output test\n",
+    "\n",
+    "This cell is the main hardware-control test.\n",
+    "It validates the chosen values against the detected model, reads and displays the current state, and performs no write unless you type the exact confirmation phrase.\n",
+    "The default 1 V and 0.1 A values are representable by every supported model, but they are not automatically safe for an attached DUT.\n",
+    "`ENERGIZE_OUTPUT` is `False` by default; changing it to `True` briefly enables the selected output and records live measurements.\n",
+    "A `finally` block disables the output, restores its original setpoints, and then restores its original output state."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "TEST_CHANNEL = spd.Channel.CH1\n",
+    "TEST_VOLTAGE_V = 1.0\n",
+    "TEST_CURRENT_A = 0.1\n",
+    "ENERGIZE_OUTPUT = False\n",
+    "OUTPUT_ON_SECONDS = 1.0\n",
+    "\n",
+    "if TEST_CHANNEL not in (spd.Channel.CH1, spd.Channel.CH2):\n",
+    "    raise ValueError(\"TEST_CHANNEL must be CH1 or CH2\")\n",
+    "\n",
+    "def validate_grid_value(name: str, value: float, maximum: float, resolution: float) -> None:\n",
+    "    decimal_value = Decimal(str(value))\n",
+    "    decimal_maximum = Decimal(str(maximum))\n",
+    "    decimal_resolution = Decimal(str(resolution))\n",
+    "    if not Decimal(\"0\") <= decimal_value <= decimal_maximum:\n",
+    "        raise ValueError(f\"{name} must be between 0 and {maximum}\")\n",
+    "    if decimal_value % decimal_resolution != 0:\n",
+    "        raise ValueError(f\"{name} must align to the {resolution} resolution\")\n",
+    "\n",
+    "validate_grid_value(\"TEST_VOLTAGE_V\", TEST_VOLTAGE_V, 32.0, psu.capabilities.voltage_resolution)\n",
+    "validate_grid_value(\"TEST_CURRENT_A\", TEST_CURRENT_A, 3.2, psu.capabilities.current_resolution)\n",
+    "source = psu.ch1 if TEST_CHANNEL is spd.Channel.CH1 else psu.ch2\n",
+    "original_voltage = source.voltage\n",
+    "original_current = source.current\n",
+    "original_output = source.output\n",
+    "\n",
+    "print(\"WARNING: this plan will send hardware-control commands.\")\n",
+    "print(f\"Channel: {TEST_CHANNEL.value}\")\n",
+    "print(f\"Voltage: {original_voltage} V -> {TEST_VOLTAGE_V} V\")\n",
+    "print(f\"Current limit: {original_current} A -> {TEST_CURRENT_A} A\")\n",
+    "print(f\"Briefly energize output: {ENERGIZE_OUTPUT}\")\n",
+    "print(f\"Cleanup restores output state: {original_output}\")\n",
+    "confirmation = f\"APPLY {TEST_CHANNEL.value}\"\n",
+    "approved = input(f\"Type {confirmation!r} to proceed, or press Enter to cancel: \").strip()\n",
+    "\n",
+    "if approved != confirmation:\n",
+    "    print(\"Cancelled before sending any write command.\")\n",
+    "else:\n",
+    "    try:\n",
+    "        source.output = False\n",
+    "        source.voltage = TEST_VOLTAGE_V\n",
+    "        source.current = TEST_CURRENT_A\n",
+    "        assert source.voltage == TEST_VOLTAGE_V\n",
+    "        assert source.current == TEST_CURRENT_A\n",
+    "        print(\"Setpoint round trip passed.\")\n",
+    "        if ENERGIZE_OUTPUT:\n",
+    "            source.output = True\n",
+    "            assert source.output is True\n",
+    "            sleep(OUTPUT_ON_SECONDS)\n",
+    "            print(\n",
+    "                {\n",
+    "                    \"measured_voltage_v\": psu.measure.voltage(TEST_CHANNEL),\n",
+    "                    \"measured_current_a\": psu.measure.current(TEST_CHANNEL),\n",
+    "                }\n",
+    "            )\n",
+    "    finally:\n",
+    "        source.output = False\n",
+    "        source.voltage = original_voltage\n",
+    "        source.current = original_current\n",
+    "        source.output = original_output\n",
+    "        print(\"Restored the original setpoints and output state.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 10. Optional CH3 output test\n",
+    "\n",
+    "CH3 has no documented remote output-state query, so this test requires physical observation and always sends `OFF` in `finally`.\n",
+    "Run it only with CH3 unloaded or connected to a correctly rated verification instrument."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "RUN_CH3_OUTPUT_TEST = False\n",
+    "CH3_ON_SECONDS = 1.0\n",
+    "if not RUN_CH3_OUTPUT_TEST:\n",
+    "    print(\"Skipped; set RUN_CH3_OUTPUT_TEST = True after preparing CH3 safely\")\n",
+    "elif input(\"Type 'ENERGIZE CH3' to proceed: \").strip() != \"ENERGIZE CH3\":\n",
+    "    print(\"Cancelled before sending any CH3 command.\")\n",
+    "else:\n",
+    "    try:\n",
+    "        psu.output(spd.Channel.CH3, spd.OutputState.ON)\n",
+    "        sleep(CH3_ON_SECONDS)\n",
+    "        print(\"Confirm the CH3 front-panel indication and physical voltage now.\")\n",
+    "    finally:\n",
+    "        psu.output(spd.Channel.CH3, spd.OutputState.OFF)\n",
+    "        print(\"Sent CH3 OFF.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 11. Optional timer and waveform configuration round trip\n",
+    "\n",
+    "This test is available only on SPD3303X/X-E, overwrites one timer group and toggles one waveform-display state after confirmation, verifies both, and restores their original values in `finally`.\n",
+    "It deliberately does not start the timer or energize an output."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "RUN_TIMER_WAVEFORM_TEST = False\n",
+    "TIMER_GROUP = 5\n",
+    "TIMER_STEP = {\"voltage_v\": 1.0, \"current_a\": 0.1, \"duration_s\": 1.0}\n",
+    "if not psu.capabilities.timer:\n",
+    "    print(f\"Timer commands are not supported by {psu.model.value}\")\n",
+    "elif not RUN_TIMER_WAVEFORM_TEST:\n",
+    "    print(\"Skipped; set RUN_TIMER_WAVEFORM_TEST = True to prepare this test\")\n",
+    "else:\n",
+    "    original_timer_step = psu.timer.set(TEST_CHANNEL, TIMER_GROUP)\n",
+    "    timer_status = psu.system.status\n",
+    "    channel_status = timer_status.ch1 if TEST_CHANNEL is spd.Channel.CH1 else timer_status.ch2\n",
+    "    original_waveform = channel_status.waveform\n",
+    "    print(\n",
+    "        {\n",
+    "            \"current_timer_step\": original_timer_step,\n",
+    "            \"planned_timer_step\": TIMER_STEP,\n",
+    "            \"current_waveform_display\": original_waveform,\n",
+    "        }\n",
+    "    )\n",
+    "    phrase = f\"OVERWRITE TIMER {TEST_CHANNEL.value} {TIMER_GROUP}\"\n",
+    "    if input(f\"Type {phrase!r} to proceed: \").strip() != phrase:\n",
+    "        print(\"Cancelled before writing the timer group.\")\n",
+    "    else:\n",
+    "        try:\n",
+    "            psu.timer.set(TEST_CHANNEL, TIMER_GROUP, **TIMER_STEP)\n",
+    "            assert psu.timer.set(TEST_CHANNEL, TIMER_GROUP) == TIMER_STEP\n",
+    "            if original_waveform is not None:\n",
+    "                changed_waveform = not original_waveform\n",
+    "                psu.output.wave(\n",
+    "                    TEST_CHANNEL,\n",
+    "                    spd.WaveformState.ON if changed_waveform else spd.WaveformState.OFF,\n",
+    "                )\n",
+    "                changed_status = psu.system.status\n",
+    "                changed_channel = (\n",
+    "                    changed_status.ch1\n",
+    "                    if TEST_CHANNEL is spd.Channel.CH1\n",
+    "                    else changed_status.ch2\n",
+    "                )\n",
+    "                assert changed_channel.waveform is changed_waveform\n",
+    "            print(\"Timer and waveform configuration round trip passed.\")\n",
+    "        finally:\n",
+    "            if original_waveform is not None:\n",
+    "                psu.output.wave(\n",
+    "                    TEST_CHANNEL,\n",
+    "                    spd.WaveformState.ON if original_waveform else spd.WaveformState.OFF,\n",
+    "                )\n",
+    "            psu.timer.set(TEST_CHANNEL, TIMER_GROUP, **original_timer_step)\n",
+    "            print(\"Restored the original timer group and waveform-display state.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 12. Optional front-panel lock round trip\n",
+    "\n",
+    "This test locks the front panel only after confirmation and always sends `*UNLOCK` in `finally`.\n",
+    "SPD3303C supports lock/unlock commands but does not provide the documented `*LOCK?` verification query."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "RUN_FRONT_PANEL_LOCK_TEST = False\n",
+    "if not RUN_FRONT_PANEL_LOCK_TEST:\n",
+    "    print(\"Skipped; set RUN_FRONT_PANEL_LOCK_TEST = True to prepare the lock test\")\n",
+    "elif input(\"Type 'LOCK FRONT PANEL' to proceed: \").strip() != \"LOCK FRONT PANEL\":\n",
+    "    print(\"Cancelled before locking the front panel.\")\n",
+    "else:\n",
+    "    try:\n",
+    "        psu.lock()\n",
+    "        if psu.capabilities.lock_query:\n",
+    "            assert psu.locked is True\n",
+    "        print(\"Confirm that the front-panel controls are locked.\")\n",
+    "    finally:\n",
+    "        psu.unlock()\n",
+    "        if psu.capabilities.lock_query:\n",
+    "            assert psu.locked is False\n",
+    "        print(\"Sent *UNLOCK.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 13. Tests intentionally left to the acceptance checklist\n",
+    "\n",
+    "Tracking modes require verified series or parallel wiring, save/recall overwrites persistent setup memory, network writes can disconnect the instrument, invalid raw commands deliberately alter the error queue, and forced link failures require external intervention.\n",
+    "Run those cases manually from [`.agents/HARDWARE_TESTS.md`](.agents/HARDWARE_TESTS.md) rather than turning them into casual notebook cells."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 14. Close the connection\n",
+    "\n",
+    "Run this final cell even after read-only testing so another process can immediately acquire the instrument."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "psu.close()\n",
+    "atexit.unregister(psu.close)\n",
+    "print(\"Connection closed.\")"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "name": "python",
+   "version": "3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
