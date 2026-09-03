@@ -165,7 +165,7 @@ def test_batching_and_verification_are_documented_as_separate_contexts() -> None
     assert "applied first and then reported as unverifiable" in guide
 
 
-def test_jupyter_hardware_test_guide_covers_setup_inputs_and_confirmations() -> None:
+def test_jupyter_hardware_test_guide_is_a_concise_pitch_and_launch_path() -> None:
     readme = (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
     guide = readme.split("## Jupyter hardware test notebook", 1)[1].split(
         "## From a manual SCPI command to Python", 1
@@ -176,17 +176,10 @@ def test_jupyter_hardware_test_guide_covers_setup_inputs_and_confirmations() -> 
         "cp test_spd300.ipynb.template test_spd300.ipynb",
         "Visual Studio Code",
         "Select Kernel",
-        "spd.ConnectionType.<TYPE>",
-        '"<IDENTIFIER>"',
-        'visa_backend="@py"',
-        'token=spd.load_gateway_auth("gateway-auth.toml")',
-        "APPLY CH1",
-        "ENERGIZE CH3",
-        "OVERWRITE TIMER CH1 5",
-        "LOCK FRONT PANEL",
-        "READ_ONE_ERROR_QUEUE_ENTRY = True",
-        "ENERGIZE_OUTPUT = False",
-        ".agents/HARDWARE_TESTS.md",
+        "quickest guided check",
+        "reporting each step",
+        "notebook itself explains",
+        "state-changing tests remain opt-in",
     ):
         assert required in guide
 
@@ -194,6 +187,9 @@ def test_jupyter_hardware_test_guide_covers_setup_inputs_and_confirmations() -> 
     assert "Copy-Item" not in guide
     assert "Linux or macOS" not in guide
     assert "Windows PowerShell" not in guide
+    assert "### Required connection inputs" not in guide
+    assert "### Safety confirmations" not in guide
+    assert "APPLY CH1" not in guide
 
 
 def test_connection_guide_covers_every_public_connection_type() -> None:

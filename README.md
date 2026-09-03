@@ -191,14 +191,9 @@ The [official SIGLENT PyVISA discovery example](docs/Programming%20Example_%20Li
 
 ## Jupyter hardware test notebook
 
-[`test_spd300.ipynb.template`](test_spd300.ipynb.template) is a guided test for a real SPD3000 Series power supply using the installed driver itself.
-It checks identity, capabilities, connection settings, decoded status, programmed values, measurements, raw serialized queries, and selected write operations while showing the result of each step.
-Read-only cells come first, and potentially state-changing cells show their plan before requesting an exact confirmation phrase.
-
-### Start the notebook
-
-Install this project with the extra required by the selected [connection](#connections) and open the repository folder in Visual Studio Code.
-The project environment already includes the Python kernel support needed by the notebook.
+[`test_spd300.ipynb.template`](test_spd300.ipynb.template) is the quickest guided check of this driver against a real SPD3000 Series power supply.
+Its annotated cells exercise the connection and representative instrument operations while reporting each step, making a firmware, transport, or individual-command failure easier to locate.
+The notebook itself explains the required connection inputs and safety confirmations; potentially state-changing tests remain opt-in and show their planned values first.
 
 Copy the template so connection details and saved outputs remain in the ignored working copy rather than entering Git history.
 If `test_spd300.ipynb` already exists, open that file and skip the copy command so its connection values and test record are not overwritten.
@@ -207,39 +202,7 @@ If `test_spd300.ipynb` already exists, open that file and skip the copy command 
 cp test_spd300.ipynb.template test_spd300.ipynb
 ```
 
-Open `test_spd300.ipynb` in Visual Studio Code, use **Select Kernel** to choose the Python environment where this project is installed, and run the cells in order.
-
-### Required connection inputs
-
-Before running the first code cell, edit its single `spd.SPD3000.connect(...)` call.
-
-- Required:
-  - Replace `<TYPE>` in `spd.ConnectionType.<TYPE>` with `SOCKET`, `VXI11`, `VISA`, or `GATEWAY`.
-  - Replace `"<IDENTIFIER>"` with the matching power-supply address, VISA resource, or gateway address described in [Connections](#connections).
-- Conditional:
-  - Uncomment `visa_backend="@py"` only when using a VISA connection that should explicitly use PyVISA-py.
-  - Uncomment `token=spd.load_gateway_auth("gateway-auth.toml")` only when connecting to an authenticated gateway, and ensure that file contains the same token as the gateway computer.
-- Normally unchanged:
-  - Keep `timeout_s=5.0` unless the connection needs a different timeout.
-  - Keep `min_command_interval_ms=100.0` unless there is a deliberate reason to use another interval.
-
-The first cell prints the connected model, serial number, connection type, normalized identifier, and local session state so these choices can be checked before continuing.
-
-### Safety confirmations
-
-Read every displayed plan before entering a confirmation phrase; pressing Enter or entering anything else cancels that write test.
-
-- The CH1/CH2 setpoint test asks for the displayed phrase such as `APPLY CH1` before changing and restoring voltage or current settings.
-  `ENERGIZE_OUTPUT = False` still allows the confirmed setpoint write, while changing it to `True` additionally energizes the selected output briefly.
-- The CH3 output test runs only after setting `RUN_CH3_OUTPUT_TEST = True` and then entering `ENERGIZE CH3`.
-- The timer and waveform test runs only after setting `RUN_TIMER_WAVEFORM_TEST = True` and then entering the displayed phrase such as `OVERWRITE TIMER CH1 5`.
-- The front-panel lock test runs only after setting `RUN_FRONT_PANEL_LOCK_TEST = True` and then entering `LOCK FRONT PANEL`.
-  Because SIGLENT does not specify the `*LOCK?` response format or transport/firmware limitations, the notebook skips programmatic lock-state assertions when that preliminary query does not answer and asks for physical front-panel verification instead.
-- The error-queue read is not a write, but it consumes one queued entry and therefore runs only after setting `READ_ONE_ERROR_QUEUE_ENTRY = True`.
-
-Disconnect sensitive DUTs before write tests, use a correctly rated load or meter, and keep the instrument front panel accessible.
-The notebook restores temporary settings in `finally` blocks, but the operator must still be prepared to disable an output manually.
-Tracking-mode changes, save/recall, network writes, deliberate error generation, and forced connection failures remain in the ordered [physical-device acceptance procedure](.agents/HARDWARE_TESTS.md) because they require additional wiring, persistent changes, or external intervention.
+Open `test_spd300.ipynb` in Visual Studio Code, use **Select Kernel** to choose the environment where this project is installed, and follow the notebook from top to bottom.
 
 ## From a manual SCPI command to Python
 
