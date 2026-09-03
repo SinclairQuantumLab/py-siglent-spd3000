@@ -112,10 +112,13 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
     assert "if psu.capabilities.lock_query:" in notebook_text
     assert "asdict(" not in notebook_text
     assert "json.dumps" not in notebook_text
-    assert "ENERGIZE_OUTPUT = False" in notebook_text
-    assert "[1/6] Write: OUTPut" in notebook_text
-    assert "[4/6] Query:" in notebook_text
-    assert "Atomic setpoint round trip passed." in notebook_text
+    assert "DISABLE {TEST_CHANNEL.value}" in notebook_text
+    assert '[1/3] Query SCPI: \\"SYST:STAT?\\"' in notebook_text
+    assert '[2/3] Write SCPI: \\"OUTP {TEST_CHANNEL.value},OFF\\"' in notebook_text
+    assert "Output-off round trip passed; the channel remains off." in notebook_text
+    assert "TEST_VOLTAGE_V" not in notebook_text
+    assert "TEST_CURRENT_A" not in notebook_text
+    assert "ENERGIZE_OUTPUT" not in notebook_text
     assert "RUN_CH3_OUTPUT_TEST = False" in notebook_text
     assert "RUN_TIMER_WAVEFORM_TEST = False" in notebook_text
     assert "RUN_FRONT_PANEL_LOCK_TEST = False" in notebook_text
