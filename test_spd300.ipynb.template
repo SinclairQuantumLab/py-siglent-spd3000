@@ -224,9 +224,10 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 8. Batch\n",
+    "## 8. Batch execution\n",
     "\n",
-    "Wrap ordinary driver operations in `with psu.batch():` to send them as one non-interleaved batch."
+    "`with psu.batch():` groups ordinary operations directly, while `@psu.batch` applies the same behavior to a function and resolves returned query values.\n",
+    "Combine `psu.batch()` with `psu.verify_writes()` to keep writes and their verification readbacks in one non-interleaved batch."
    ]
   },
   {
@@ -235,10 +236,25 @@
    "metadata": {},
    "outputs": [],
    "source": [
+    "# Context-manager form\n",
     "with psu.batch():\n",
     "    psu.ch1.voltage = 1.0\n",
     "    psu.ch1.current = 0.1\n",
-    "    psu.ch1.output = True"
+    "    psu.ch1.output = True\n",
+    "\n",
+    "# Decorator form\n",
+    "@psu.batch\n",
+    "def read_ch1():\n",
+    "    return psu.ch1.voltage, psu.ch1.current, psu.ch1.output\n",
+    "\n",
+    "ch1_voltage, ch1_current_limit, ch1_output = read_ch1()\n",
+    "print(ch1_voltage, ch1_current_limit, ch1_output)\n",
+    "\n",
+    "# Batch writes and their verification readbacks together\n",
+    "with psu.batch(), psu.verify_writes():\n",
+    "    psu.ch1.voltage = ch1_voltage\n",
+    "    psu.ch1.current = ch1_current_limit\n",
+    "    psu.ch1.output = ch1_output"
    ]
   },
   {

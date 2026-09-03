@@ -112,7 +112,7 @@ def test_notebook_orders_control_verification_batching_and_diagnostics() -> None
         "## 5. CH1 and CH2 read-only checks",
         "## 6. Basic CH1 output control",
         "## 7. Write verification",
-        "## 8. Batch",
+        "## 8. Batch execution",
         "## 9. Repeated-query stability",
         "## 10. Model-specific read-only checks",
         "## 11. Read-only semantic and raw batches",
@@ -123,7 +123,7 @@ def test_notebook_orders_control_verification_batching_and_diagnostics() -> None
     assert "batch_identity, batch_status = semantic_responses" in notebook_text
     assert "## 6. Basic CH1 output control" in sections
     assert "## 7. Write verification" in sections
-    assert "## 8. Batch" in sections
+    assert "## 8. Batch execution" in sections
     basic_control_index = next(
         index
         for index, cell in enumerate(notebook["cells"])
@@ -149,13 +149,14 @@ def test_notebook_orders_control_verification_batching_and_diagnostics() -> None
         for index, cell in enumerate(notebook["cells"])
         if "".join(cell["source"]).startswith("## 8. Batch")
     )
-    batch_syntax = "".join(notebook["cells"][batch_syntax_index + 1]["source"])
-    assert batch_syntax == (
-        "with psu.batch():\n"
-        "    psu.ch1.voltage = 1.0\n"
-        "    psu.ch1.current = 0.1\n"
-        "    psu.ch1.output = True"
-    )
+    batch_example = "".join(notebook["cells"][batch_syntax_index + 1]["source"])
+    assert "# Context-manager form" in batch_example
+    assert "with psu.batch():" in batch_example
+    assert "# Decorator form" in batch_example
+    assert "@psu.batch" in batch_example
+    assert "def read_ch1():" in batch_example
+    assert "ch1_voltage, ch1_current_limit, ch1_output = read_ch1()" in batch_example
+    assert "with psu.batch(), psu.verify_writes():" in batch_example
 
 
 def test_notebook_exercises_public_driver_paths_with_safety_guidance() -> None:
