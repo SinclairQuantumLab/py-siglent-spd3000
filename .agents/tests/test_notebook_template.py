@@ -93,6 +93,18 @@ def test_notebook_demonstrates_manual_scpi_command_discovery() -> None:
     assert "print(match)" in example
 
 
+def test_notebook_demonstrates_semantic_batching_and_verified_writes() -> None:
+    notebook_text = json.dumps(_notebook())
+
+    assert "Read-only semantic and raw batches" in notebook_text
+    assert "with psu.batch() as semantic_responses:" in notebook_text
+    assert "batch_identity, batch_status = semantic_responses" in notebook_text
+    assert "Verified CH1/CH2 output-off write" in notebook_text
+    assert "with psu.verify_writes():" in notebook_text
+    assert "automatic readback matched False" in notebook_text
+    assert "Independent query SCPI" in notebook_text
+
+
 def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
     notebook_text = json.dumps(_notebook())
 
@@ -135,7 +147,7 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
     assert "json.dumps" not in notebook_text
     assert "DISABLE {TEST_CHANNEL.value}" in notebook_text
     assert '[1/3] Query SCPI: \\"SYST:STAT?\\"' in notebook_text
-    assert '[2/3] Write SCPI: \\"OUTP {TEST_CHANNEL.value},OFF\\"' in notebook_text
+    assert '[2/3] Verified write SCPI: \\"OUTP {TEST_CHANNEL.value},OFF\\"' in notebook_text
     assert "Output-off round trip passed; the channel remains off." in notebook_text
     assert "TEST_VOLTAGE_V" not in notebook_text
     assert "TEST_CURRENT_A" not in notebook_text

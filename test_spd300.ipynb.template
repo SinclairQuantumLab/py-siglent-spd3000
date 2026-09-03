@@ -228,9 +228,10 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 8. Read-only serialized batch\n",
+    "## 8. Read-only semantic and raw batches\n",
     "\n",
-    "This exercises the public raw-SCPI batch path and, when connected through the gateway, verifies that the two queries are submitted as one non-interleaved batch."
+    "The semantic batch returns ordinary parsed Python objects, while the raw batch returns SCPI strings aligned with its commands.\n",
+    "Both paths submit their two queries as one non-interleaved batch, which is especially important when the gateway is serving multiple clients."
    ]
   },
   {
@@ -239,10 +240,19 @@
    "metadata": {},
    "outputs": [],
    "source": [
-    "batch = psu.scpi.execute([spd.Query(\"*IDN?\"), spd.Query(\"SYST:STAT?\")])\n",
-    "print(batch.values)\n",
-    "assert len(batch.values) == 2\n",
-    "assert all(isinstance(value, str) for value in batch.values)"
+    "with psu.batch() as semantic_responses:\n",
+    "    _ = psu.idn\n",
+    "    _ = psu.system.status\n",
+    "\n",
+    "batch_identity, batch_status = semantic_responses\n",
+    "print(batch_identity)\n",
+    "print(batch_status)\n",
+    "assert batch_identity.model is psu.model\n",
+    "\n",
+    "raw_batch = psu.scpi.execute([spd.Query(\"*IDN?\"), spd.Query(\"SYST:STAT?\")])\n",
+    "print(raw_batch.values)\n",
+    "assert len(raw_batch.values) == 2\n",
+    "assert all(isinstance(value, str) for value in raw_batch.values)"
    ]
   },
   {
@@ -271,10 +281,11 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 10. Confirmed CH1/CH2 output-off test\n",
+    "## 10. Verified CH1/CH2 output-off write\n",
     "\n",
     "This first write test changes no voltage or current setting and never enables an output.\n",
-    "It queries the selected output, sends one `OFF` command after confirmation, and queries the output once more.\n",
+    "After confirmation, `psu.verify_writes()` sends one `OFF` command and automatically checks the documented `SYSTem:STATus?` readback.\n",
+    "A final independent query demonstrates that verification is not a cached result.\n",
     "Each operation is printed before it starts so the last visible line identifies a timeout.\n",
     "The selected channel is deliberately left off."
    ]
@@ -302,10 +313,15 @@
     "if approved != confirmation:\n",
     "    print(\"Cancelled before sending any write command.\")\n",
     "else:\n",
-    "    print(f'[2/3] Write SCPI: \"OUTP {TEST_CHANNEL.value},OFF\"', flush=True)\n",
-    "    psu.output(TEST_CHANNEL, spd.OutputState.OFF)\n",
-    "    print(\"      completed\", flush=True)\n",
-    "    print('[3/3] Query SCPI: \"SYST:STAT?\"', flush=True)\n",
+    "    print(\n",
+    "        f'[2/3] Verified write SCPI: \"OUTP {TEST_CHANNEL.value},OFF\"; '\n",
+    "        'automatic readback: \"SYST:STAT?\"',\n",
+    "        flush=True,\n",
+    "    )\n",
+    "    with psu.verify_writes():\n",
+    "        psu.output(TEST_CHANNEL, spd.OutputState.OFF)\n",
+    "    print(\"      completed: automatic readback matched False\", flush=True)\n",
+    "    print('[3/3] Independent query SCPI: \"SYST:STAT?\"', flush=True)\n",
     "    observed_output = source.output\n",
     "    print(f\"      completed: {TEST_CHANNEL.value} output={observed_output}\", flush=True)\n",
     "    assert observed_output is False\n",
