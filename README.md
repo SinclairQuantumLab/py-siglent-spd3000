@@ -11,6 +11,10 @@ Connecting through the [gateway server](#gateway-server) is the recommended way 
 - [Basic use](#basic-use)
 - [Connections](#connections)
   - [VISA resource identifiers](#visa-resource-identifiers)
+- [Jupyter hardware test notebook](#jupyter-hardware-test-notebook)
+  - [Start the notebook](#start-the-notebook)
+  - [Required connection inputs](#required-connection-inputs)
+  - [Safety confirmations](#safety-confirmations)
 - [From a manual SCPI command to Python](#from-a-manual-scpi-command-to-python)
   - [1. Guess the Python path from the SCPI command line](#1-guess-the-python-path-from-the-scpi-command-line)
   - [2. Confirm the mapping with the helper](#2-confirm-the-mapping-with-the-helper)
@@ -114,6 +118,7 @@ Every instrument-state property read performs a fresh hardware query; output sta
 The reported `open` state means that `close()` has not been called; it is not an active reachability probe.
 Public identification, capability, execution-setting, status, error, SCPI-command information, and gateway-setting objects also provide readable multiline `str()` output; formatting an already obtained object performs no I/O.
 The SPD command set has no documented `OUTPut?` query, so special `psu.ch<CH_NUM>.output` properties are implemented by querying and decoding `SYSTem:STATus?`.
+For a guided end-to-end check against a real instrument, use the [Jupyter hardware test notebook](#jupyter-hardware-test-notebook); it starts with read-only checks and gates state-changing tests behind explicit user input.
 
 For more involved programs, the same package namespace provides connection types, enums, and execution settings.
 The unified `connect()` factory accepts common execution settings directly:
@@ -181,6 +186,74 @@ with spd.SPD3000.connect(
 
 The VISA resource grammar is generally portable, but driver installation and USB device permissions remain operating-system-specific.
 The [official SIGLENT PyVISA discovery example](docs/Programming%20Example_%20List%20connected%20VISA%20compatible%20resources%20using%20PyVISA.pdf) provides additional resource-discovery context.
+
+## Jupyter hardware test notebook
+
+[`test_spd300.ipynb.template`](test_spd300.ipynb.template) is a guided test for a real SPD3000 Series power supply using the installed driver itself.
+It checks identity, capabilities, connection settings, decoded status, programmed values, measurements, raw serialized queries, and selected write operations while showing the result of each step.
+Read-only cells come first, and potentially state-changing cells show their plan before requesting an exact confirmation phrase.
+
+### Start the notebook
+
+Install this project with the extra required by the selected [connection](#connections), activate that Python environment, and install [JupyterLab](https://jupyter.org/install) into the same environment:
+
+```bash
+python -m pip install jupyterlab
+```
+
+Copy the template so connection details and saved outputs remain in the ignored working copy rather than entering Git history.
+If `test_spd300.ipynb` already exists, open that file and skip the copy command so its connection values and test record are not overwritten.
+
+Windows PowerShell:
+
+```powershell
+Copy-Item test_spd300.ipynb.template test_spd300.ipynb
+jupyter lab test_spd300.ipynb
+```
+
+Linux or macOS:
+
+```bash
+cp -n test_spd300.ipynb.template test_spd300.ipynb
+jupyter lab test_spd300.ipynb
+```
+
+Select the kernel belonging to that same environment and run the cells in order.
+
+> **NOTE:** `uv` is optional.
+> From the repository root, `uv run --with jupyterlab jupyter lab test_spd300.ipynb` starts JupyterLab for a raw-socket test without adding JupyterLab as a runtime dependency.
+> Use `uv run --extra driver --with jupyterlab jupyter lab test_spd300.ipynb` for a direct VISA or VXI-11 test, or replace `driver` with `gateway` for a gateway connection.
+
+### Required connection inputs
+
+Before running the first code cell, edit its single `spd.SPD3000.connect(...)` call.
+
+- Required:
+  - Replace `<TYPE>` in `spd.ConnectionType.<TYPE>` with `SOCKET`, `VXI11`, `VISA`, or `GATEWAY`.
+  - Replace `"<IDENTIFIER>"` with the matching power-supply address, VISA resource, or gateway address described in [Connections](#connections).
+- Conditional:
+  - Uncomment `visa_backend="@py"` only when using a VISA connection that should explicitly use PyVISA-py.
+  - Uncomment `token=spd.load_gateway_auth("gateway-auth.toml")` only when connecting to an authenticated gateway, and ensure that file contains the same token as the gateway computer.
+- Normally unchanged:
+  - Keep `timeout_s=5.0` unless the connection needs a different timeout.
+  - Keep `min_command_interval_ms=100.0` unless there is a deliberate reason to use another interval.
+
+The first cell prints the connected model, serial number, connection type, normalized identifier, and local session state so these choices can be checked before continuing.
+
+### Safety confirmations
+
+Read every displayed plan before entering a confirmation phrase; pressing Enter or entering anything else cancels that write test.
+
+- The CH1/CH2 setpoint test asks for the displayed phrase such as `APPLY CH1` before changing and restoring voltage or current settings.
+  `ENERGIZE_OUTPUT = False` still allows the confirmed setpoint write, while changing it to `True` additionally energizes the selected output briefly.
+- The CH3 output test runs only after setting `RUN_CH3_OUTPUT_TEST = True` and then entering `ENERGIZE CH3`.
+- The timer and waveform test runs only after setting `RUN_TIMER_WAVEFORM_TEST = True` and then entering the displayed phrase such as `OVERWRITE TIMER CH1 5`.
+- The front-panel lock test runs only after setting `RUN_FRONT_PANEL_LOCK_TEST = True` and then entering `LOCK FRONT PANEL`.
+- The error-queue read is not a write, but it consumes one queued entry and therefore runs only after setting `READ_ONE_ERROR_QUEUE_ENTRY = True`.
+
+Disconnect sensitive DUTs before write tests, use a correctly rated load or meter, and keep the instrument front panel accessible.
+The notebook restores temporary settings in `finally` blocks, but the operator must still be prepared to disable an output manually.
+Tracking-mode changes, save/recall, network writes, deliberate error generation, and forced connection failures remain in the ordered [physical-device acceptance procedure](.agents/HARDWARE_TESTS.md) because they require additional wiring, persistent changes, or external intervention.
 
 ## From a manual SCPI command to Python
 
@@ -494,7 +567,4 @@ python -m pip wheel . --no-deps --wheel-dir dist
 
 Official vendor manuals and application notes used during development are indexed in [`docs/README.md`](docs/README.md), including source URLs and file hashes.
 Hardware tests are opt-in and are not run without an attached supply.
-For a guided interactive check, copy [`test_spd300.ipynb.template`](test_spd300.ipynb.template) to `test_spd300.ipynb`, edit only its connection-settings cell, and run its documented cells in order.
-In its `connect()` call, replace `<TYPE>` in `spd.ConnectionType.<TYPE>` with an enum member such as `SOCKET` or `VISA`, replace `"<IDENTIFIER>"`, and uncomment only the connection-specific argument described for VISA or an authenticated gateway.
-The notebook begins with read-only checks and requires explicit confirmation before every hardware-control test.
-The ordered physical-device acceptance procedure is maintained in [`.agents/HARDWARE_TESTS.md`](.agents/HARDWARE_TESTS.md).
+Use the [Jupyter hardware test notebook](#jupyter-hardware-test-notebook) for a guided interactive check or the ordered [physical-device acceptance procedure](.agents/HARDWARE_TESTS.md) for the complete manual test campaign.

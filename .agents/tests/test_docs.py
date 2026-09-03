@@ -129,6 +129,7 @@ def test_readme_has_table_of_contents_for_major_sections() -> None:
         "#installation",
         "#basic-use",
         "#connections",
+        "#jupyter-hardware-test-notebook",
         "#from-a-manual-scpi-command-to-python",
         "#intentional-output-convenience-exception",
         "#scpi-shaped-api",
@@ -138,6 +139,33 @@ def test_readme_has_table_of_contents_for_major_sections() -> None:
         "#development",
     ):
         assert f"]({anchor})" in contents
+
+
+def test_jupyter_hardware_test_guide_covers_setup_inputs_and_confirmations() -> None:
+    readme = (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
+    guide = readme.split("## Jupyter hardware test notebook", 1)[1].split(
+        "## From a manual SCPI command to Python", 1
+    )[0]
+
+    for required in (
+        "test_spd300.ipynb.template",
+        "Copy-Item test_spd300.ipynb.template test_spd300.ipynb",
+        "cp -n test_spd300.ipynb.template test_spd300.ipynb",
+        "python -m pip install jupyterlab",
+        "uv run --with jupyterlab jupyter lab test_spd300.ipynb",
+        "spd.ConnectionType.<TYPE>",
+        '"<IDENTIFIER>"',
+        'visa_backend="@py"',
+        'token=spd.load_gateway_auth("gateway-auth.toml")',
+        "APPLY CH1",
+        "ENERGIZE CH3",
+        "OVERWRITE TIMER CH1 5",
+        "LOCK FRONT PANEL",
+        "READ_ONE_ERROR_QUEUE_ENTRY = True",
+        "ENERGIZE_OUTPUT = False",
+        ".agents/HARDWARE_TESTS.md",
+    ):
+        assert required in guide
 
 
 def test_connection_guide_covers_every_public_connection_type() -> None:
