@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from collections.abc import Sequence
-from dataclasses import asdict
 from pathlib import Path
 
 from .driver import SPD3000
@@ -148,16 +146,10 @@ def build_parser() -> argparse.ArgumentParser:
 def _run(args: argparse.Namespace) -> int:
     if args.command == "lookup":
         matches = lookup_command(args.scpi)
-        for info in matches:
-            alias_text = (
-                f" (Python aliases: {', '.join(info.python_aliases)})"
-                if info.python_aliases
-                else ""
-            )
-            print(
-                f"{info.canonical_scpi}: {info.python_path}{alias_text} "
-                f"[{info.access.value}; {', '.join(model.value for model in info.models)}]"
-            )
+        for index, info in enumerate(matches):
+            if index:
+                print()
+            print(info)
         return 0 if matches else 1
 
     if args.command == "gateway":
@@ -192,7 +184,7 @@ def _run(args: argparse.Namespace) -> int:
 
     with _open_device(args) as psu:
         if args.command == "idn":
-            print(psu.idn.raw)
+            print(psu.idn)
         elif args.command == "set":
             source_channel = psu.ch1 if args.channel is Channel.CH1 else psu.ch2
             setattr(source_channel, args.quantity, args.value)
@@ -206,7 +198,7 @@ def _run(args: argparse.Namespace) -> int:
         elif args.command == "output":
             psu.output(args.channel, args.state)
         elif args.command == "status":
-            print(json.dumps(asdict(psu.system.status), default=str, sort_keys=True))
+            print(psu.system.status)
         elif args.command == "raw":
             if args.query:
                 print(psu.scpi.query(args.scpi))
