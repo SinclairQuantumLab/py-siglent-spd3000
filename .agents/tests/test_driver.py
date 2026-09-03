@@ -144,8 +144,13 @@ def test_string_summary_uses_cached_identity_and_local_connection_state() -> Non
     psu._set_connection_metadata(ConnectionType.SOCKET, "192.168.1.50:5025")
 
     assert str(psu) == (
-        "SPD3303X (S/N SPD0001); "
-        "connection=socket 192.168.1.50:5025; state=open"
+        "SIGLENT SPD3000 power supply\n"
+        "- Model: SPD3303X\n"
+        "- Serial number: SPD0001\n"
+        "- Connection:\n"
+        "  - Type: socket\n"
+        "  - Identifier: 192.168.1.50:5025\n"
+        "  - State: open"
     )
     assert psu.connection_type is ConnectionType.SOCKET
     assert psu.connection_identifier == "192.168.1.50:5025"
@@ -154,7 +159,7 @@ def test_string_summary_uses_cached_identity_and_local_connection_state() -> Non
 
     psu.close()
 
-    assert str(psu).endswith("state=closed")
+    assert str(psu).endswith("  - State: closed")
     assert psu.is_open is False
     assert executor.commands == ["*IDN?"]
 
@@ -163,7 +168,15 @@ def test_string_summary_names_an_injected_executor() -> None:
     executor = FakeExecutor(responses_for("SPD3303C"))
     psu = SPD3000(executor)
 
-    assert str(psu) == "SPD3303C (S/N SPD0001); connection=FakeExecutor; state=open"
+    assert str(psu) == (
+        "SIGLENT SPD3000 power supply\n"
+        "- Model: SPD3303C\n"
+        "- Serial number: SPD0001\n"
+        "- Connection:\n"
+        "  - Type: injected executor\n"
+        "  - Identifier: FakeExecutor\n"
+        "  - State: open"
+    )
     assert psu.connection_type is None
     assert psu.connection_identifier is None
 

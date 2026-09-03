@@ -895,17 +895,23 @@ class SPD3000:
         """Return a concise identity and connection summary without instrument I/O."""
 
         identity = self._session_identity
-        connection = (
+        connection_type = (
             self._connection_type.value
             if self._connection_type is not None
-            else type(self._executor).__name__
+            else "injected executor"
         )
-        if self._connection_identifier is not None:
-            connection = f"{connection} {self._connection_identifier}"
+        connection_identifier = self._connection_identifier or type(self._executor).__name__
         state = "open" if self.is_open else "closed"
-        return (
-            f"{identity.model.value} (S/N {identity.serial_number}); "
-            f"connection={connection}; state={state}"
+        return "\n".join(
+            (
+                "SIGLENT SPD3000 power supply",
+                f"- Model: {identity.model.value}",
+                f"- Serial number: {identity.serial_number}",
+                "- Connection:",
+                f"  - Type: {connection_type}",
+                f"  - Identifier: {connection_identifier}",
+                f"  - State: {state}",
+            )
         )
 
     def __enter__(self) -> SPD3000:
