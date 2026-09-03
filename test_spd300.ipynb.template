@@ -87,7 +87,34 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 3. Decoded system status\n",
+    "## 3. Find a Python API from a manual SCPI command\n",
+    "\n",
+    "Copy a command line from the programming manual into `SCPI_COMMAND_FROM_MANUAL`; command arguments, capitalization, abbreviations, and a trailing `?` are accepted.\n",
+    "`lookup_command()` prints the canonical `psu` path, read/write access, supported models, documentation source, and any friendly aliases without communicating with the instrument."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "SCPI_COMMAND_FROM_MANUAL = \"MEASure:VOLTage? CH1\"\n",
+    "matches = spd.lookup_command(SCPI_COMMAND_FROM_MANUAL)\n",
+    "\n",
+    "if matches:\n",
+    "    print(f\"Python API matches for SCPI: {SCPI_COMMAND_FROM_MANUAL!r}\")\n",
+    "    for match in matches:\n",
+    "        print(match)\n",
+    "else:\n",
+    "    print(f\"No registered Python API matches SCPI: {SCPI_COMMAND_FROM_MANUAL!r}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4. Decoded system status\n",
     "\n",
     "`SYSTem:STATus?` is decoded into a typed immutable result containing the operating mode and CH1/CH2 regulation, output, timer, and waveform state."
    ]
@@ -107,7 +134,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 4. CH1 and CH2 read-only checks\n",
+    "## 5. CH1 and CH2 read-only checks\n",
     "\n",
     "This cell compares programmed voltage/current properties with live measurements.\n",
     "Power is queried only on models that advertise that capability."
@@ -137,7 +164,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 5. Model-specific read-only checks\n",
+    "## 6. Model-specific read-only checks\n",
     "\n",
     "Network settings and front-panel lock state are queried only when the detected model documents those queries.\n",
     "Some SPD3303X firmware/connection combinations do not answer the separately documented `*LOCK?` command; that optional check is reported without stopping the remaining tests."
@@ -174,7 +201,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 6. Repeated-query stability\n",
+    "## 7. Repeated-query stability\n",
     "\n",
     "Repeated identity and status reads help reveal stale, truncated, or mistimed responses without changing hardware settings."
    ]
@@ -201,7 +228,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 7. Read-only serialized batch\n",
+    "## 8. Read-only serialized batch\n",
     "\n",
     "This exercises the public raw-SCPI batch path and, when connected through the gateway, verifies that the two queries are submitted as one non-interleaved batch."
    ]
@@ -222,7 +249,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 8. Optional error-queue read\n",
+    "## 9. Optional error-queue read\n",
     "\n",
     "Reading `psu.system.error` removes one entry from the instrument error queue, so this diagnostic is opt-in even though it sends no write command."
    ]
@@ -244,7 +271,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 9. Confirmed CH1/CH2 output-off test\n",
+    "## 10. Confirmed CH1/CH2 output-off test\n",
     "\n",
     "This first write test changes no voltage or current setting and never enables an output.\n",
     "It queries the selected output, sends one `OFF` command after confirmation, and queries the output once more.\n",
@@ -289,7 +316,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 10. Optional CH3 output test\n",
+    "## 11. Optional CH3 output test\n",
     "\n",
     "CH3 has no documented remote output-state query, so this test requires physical observation and always sends `OFF` in `finally`.\n",
     "Run it only with CH3 unloaded or connected to a correctly rated verification instrument."
@@ -321,7 +348,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 11. Optional timer and waveform configuration round trip\n",
+    "## 12. Optional timer and waveform configuration round trip\n",
     "\n",
     "This test is available only on SPD3303X/X-E, overwrites one timer group and toggles one waveform-display state after confirmation, verifies both, and restores their original values in `finally`.\n",
     "It deliberately does not start the timer or energize an output."
@@ -382,7 +409,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 12. Optional front-panel lock round trip\n",
+    "## 13. Optional front-panel lock round trip\n",
     "\n",
     "This test locks the front panel only after confirmation and always sends `*UNLOCK` in `finally`.\n",
     "Programmatic state assertions run only if `*LOCK?` returned a usable response in the earlier read-only check; otherwise confirm both operations physically at the front panel."
@@ -420,7 +447,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 13. Tests intentionally left to the acceptance checklist\n",
+    "## 14. Tests intentionally left to the acceptance checklist\n",
     "\n",
     "Tracking modes require verified series or parallel wiring, save/recall overwrites persistent setup memory, network writes can disconnect the instrument, invalid raw commands deliberately alter the error queue, and forced link failures require external intervention.\n",
     "Run those cases manually from [`.agents/HARDWARE_TESTS.md`](.agents/HARDWARE_TESTS.md) rather than turning them into casual notebook cells."
@@ -430,7 +457,7 @@
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "## 14. Close the connection\n",
+    "## 15. Close the connection\n",
     "\n",
     "Run this final cell even after read-only testing so another process can immediately acquire the instrument."
    ]

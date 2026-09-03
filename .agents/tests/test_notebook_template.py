@@ -74,11 +74,31 @@ def test_notebook_template_is_linked_and_working_copy_is_ignored() -> None:
     assert "test_spd300.ipynb" in gitignore
 
 
+def test_notebook_demonstrates_manual_scpi_command_discovery() -> None:
+    notebook = _notebook()
+    discovery_index = next(
+        index
+        for index, cell in enumerate(notebook["cells"])
+        if cell["cell_type"] == "code"
+        and "SCPI_COMMAND_FROM_MANUAL" in "".join(cell["source"])
+    )
+    guide = "".join(notebook["cells"][discovery_index - 1]["source"])
+    example = "".join(notebook["cells"][discovery_index]["source"])
+
+    assert "Find a Python API from a manual SCPI command" in guide
+    assert "without communicating with the instrument" in guide
+    assert 'SCPI_COMMAND_FROM_MANUAL = "MEASure:VOLTage? CH1"' in example
+    assert "spd.lookup_command(SCPI_COMMAND_FROM_MANUAL)" in example
+    assert "for match in matches:" in example
+    assert "print(match)" in example
+
+
 def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
     notebook_text = json.dumps(_notebook())
 
     for expected in (
         "spd.SPD3000.connect(",
+        "spd.lookup_command(",
         "psu.idn",
         "psu.system.status",
         "psu.measure.voltage",
