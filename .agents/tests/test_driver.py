@@ -144,7 +144,7 @@ def test_string_summary_uses_cached_identity_and_local_connection_state() -> Non
     psu._set_connection_metadata(ConnectionType.SOCKET, "192.168.1.50:5025")
 
     assert str(psu) == (
-        "SIGLENT SPD3000 power supply driver instance\n"
+        "SIGLENT SPD3000 Series power supply driver instance\n"
         "- Model: SPD3303X\n"
         "- Serial number: SPD0001\n"
         "- Connection:\n"
@@ -169,7 +169,7 @@ def test_string_summary_names_an_injected_executor() -> None:
     psu = SPD3000(executor)
 
     assert str(psu) == (
-        "SIGLENT SPD3000 power supply driver instance\n"
+        "SIGLENT SPD3000 Series power supply driver instance\n"
         "- Model: SPD3303C\n"
         "- Serial number: SPD0001\n"
         "- Connection:\n"
