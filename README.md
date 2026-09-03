@@ -138,7 +138,7 @@ Enum members such as `spd.ConnectionType.SOCKET` are recommended, while their lo
 | --- | --- | --- | --- |
 | `spd.ConnectionType.SOCKET` or `"socket"` | Ethernet using raw SCPI over TCP 5025 | Power supply hostname or IP address, such as `"192.168.1.50"` | SPD3303X/X-E; base package |
 | `spd.ConnectionType.VXI11` or `"vxi11"` | Ethernet using VXI-11 directly through `python-vxi11` | Power supply hostname or IP address | SPD3303X/X-E; `driver` extra |
-| `spd.ConnectionType.VISA` or `"visa"` | USBTMC over USB, or a VISA-managed Ethernet connection such as VXI-11 | Complete VISA resource reported on that computer | All models over USB; SPD3303X/X-E over Ethernet when supported by the selected VISA backend; `driver` extra |
+| `spd.ConnectionType.VISA` or `"visa"` | USBTMC over USB, or a VISA-managed Ethernet connection such as VXI-11 | Complete VISA resource reported on that computer, such as `"USB0::0x0483::0x7540::SPD3XGB4150080::INSTR"` or `"TCPIP0::192.168.55.122::inst0::INSTR"` | All models over USB; SPD3303X/X-E over Ethernet when supported by the selected VISA backend; `driver` extra |
 | `spd.ConnectionType.GATEWAY` or `"gateway"` | This package's gateway protocol over TCP, with the gateway owning the physical connection | `"localhost"` when the client and gateway run on the same computer; otherwise the gateway computer's hostname or IP address, such as `"192.168.50.20"`; append a non-default port as in `"192.168.50.20:3333"`; never use the power supply address | All supported models through a suitably connected gateway; `gateway` extra |
 
 Ordinary raw socket connections always use the instrument's documented TCP port 5025, while gateway connections use port 8765 by default.
@@ -154,18 +154,18 @@ After installing the `driver` extra and connecting the instrument, PyVISA-py res
 python -c "import pyvisa; print(*pyvisa.ResourceManager('@py').list_resources(), sep='\n')"
 ```
 
-Typical resource shapes are:
+The official SIGLENT example scan returns these complete resource strings:
 
-- USBTMC: `USB0::0x0483::0x7540::<SERIAL_NUMBER>::INSTR`
-- Ethernet through VISA/VXI-11: `TCPIP0::<INSTRUMENT_HOST>::inst0::INSTR`
+- USBTMC power supply: `USB0::0x0483::0x7540::SPD3XGB4150080::INSTR`
+- Ethernet instrument: `TCPIP0::192.168.55.122::inst0::INSTR`
 
-Replace the entire example with the resource returned on the target computer.
+These are format examples from SIGLENT rather than identifiers for your instrument, so replace the entire string with the resource returned on the target computer.
 Use `visa_backend="@py"` with PyVISA-py, or omit `visa_backend` to let PyVISA select an installed system backend such as NI-VISA:
 
 ```python
 import siglent_spd3000 as spd
 
-VISA_RESOURCE = "USB0::0x0483::0x7540::<SERIAL_NUMBER>::INSTR"  # replace this value
+VISA_RESOURCE = "USB0::0x0483::0x7540::SPD3XGB4150080::INSTR"  # example only; replace it
 
 with spd.SPD3000.connect(
     spd.ConnectionType.VISA,

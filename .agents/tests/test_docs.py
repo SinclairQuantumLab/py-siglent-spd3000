@@ -149,8 +149,9 @@ def test_connection_guide_covers_every_public_connection_type() -> None:
         assert f"spd.ConnectionType.{connection}" in connections
     assert "TCP 5025" in connections
     assert "port 8765" in connections
-    assert "USB0::0x0483::0x7540::<SERIAL_NUMBER>::INSTR" in connections
-    assert "TCPIP0::<INSTRUMENT_HOST>::inst0::INSTR" in connections
+    assert "USB0::0x0483::0x7540::SPD3XGB4150080::INSTR" in connections
+    assert "TCPIP0::192.168.55.122::inst0::INSTR" in connections
+    assert "format examples from SIGLENT rather than identifiers for your instrument" in connections
     assert "list_resources()" in connections
     assert '`"localhost"` when the client and gateway run on the same computer' in connections
     assert '`"192.168.50.20:3333"`' in connections
