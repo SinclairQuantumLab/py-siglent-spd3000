@@ -157,13 +157,13 @@ def test_batching_and_verification_are_documented_as_separate_contexts() -> None
     readme = (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
     guide = readme.split("## Batching and verification", 1)[1].split("## Timing", 1)[0]
 
-    assert "with psu.batch:" in guide
+    assert "@psu.batch" in guide
+    assert "with psu.batch_write:" in guide
     assert "with psu.verify:" in guide
-    assert "with psu.batch, psu.verify:" in guide
-    assert "Deferred[T]" in guide
-    assert "voltage.value" in guide
-    assert "SPD3000DeferredResultError" in guide
-    assert "Raw `psu.scpi.query()` also returns a Deferred" in guide
+    assert "with psu.batch_write, psu.verify:" in guide
+    assert "internally deferred" in guide
+    assert 'print(values["voltage"])  # float' in guide
+    assert "Raw `psu.scpi.query()` can also be collected" in guide
     assert "SPD3000VerificationError" in guide
     assert "never imply rollback" in guide
     assert "applied first and then reported as unverifiable" in guide

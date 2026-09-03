@@ -354,24 +354,38 @@ Use `lookup_command("MEAS:VOLT?")` to discover the corresponding Python path, or
 ## Batching and verification
 
 Ordinary setters execute immediately and do not perform an implicit readback.
-Use `psu.batch` to collect semantic writes and queries and submit them as one non-interleaved command batch:
+Decorate a function with `@psu.batch` to execute its semantic writes and queries as one non-interleaved batch:
 
 ```python
-with psu.batch:
+@psu.batch
+def configure_and_read():
     psu.ch1.voltage = 5.0
     psu.ch1.current = 0.5
-    voltage = psu.ch1.voltage
-    measured = psu.measure.voltage(spd.Channel.CH1)
+    return {
+        "voltage": psu.ch1.voltage,
+        "measured": psu.measure.voltage(spd.Channel.CH1),
+    }
 
-print(voltage.value)
-print(measured.value)
+values = configure_and_read()
+print(values["voltage"])  # float
+print(values["measured"])  # float
 ```
 
-The block above sends nothing until normal block exit.
-Each query made inside the block returns a `Deferred[T]`, which is populated with its ordinary parsed Python value when the block exits successfully.
-Accessing `.value` or `.result()` before block exit raises `SPD3000DeferredResultError` because the query has not been sent yet.
-If the Python block raises an exception, all collected operations are discarded without being sent and its Deferred results become cancelled.
-An execution or response-parsing failure is raised when the block exits and is retained by the affected Deferred result.
+The function body sends nothing immediately; its query expressions are internally deferred until the function returns.
+The decorator then executes the collected operations and replaces Deferred values in the returned built-in containers with their ordinary parsed Python values.
+If the function body raises, its collected operations are discarded without being sent.
+Execution and response-parsing failures are raised by the decorated function call.
+
+Use `psu.batch_write` when only writes need to be grouped and no result needs to be returned:
+
+```python
+with psu.batch_write:
+    psu.ch1.voltage = 5.0
+    psu.ch1.current = 0.5
+    psu.ch1.output = True
+```
+
+Queries inside `with psu.batch_write:` are rejected so a result cannot be accidentally requested from a deferred write-only block.
 
 Use `psu.verify` when each semantic write must be followed by its documented readback and checked against the requested value:
 
@@ -380,11 +394,11 @@ with psu.verify:
     psu.ch1.voltage = 5.0
 ```
 
-Without `psu.batch`, each setter executes its own non-interleaved write/query pair.
-The two contexts compose, so several verified settings can travel as one batch:
+Without `psu.batch_write`, each setter executes its own non-interleaved write/query pair.
+The two contexts compose, so several verified settings can travel as one write batch:
 
 ```python
-with psu.batch, psu.verify:
+with psu.batch_write, psu.verify:
     psu.ch1.voltage = 5.0
     psu.ch1.current = 0.5
     psu.ch1.output = True
@@ -405,8 +419,8 @@ except spd.SPD3000VerificationError as exc:
 
 Verification errors never imply rollback.
 In particular, an unqueryable setting such as CH3 output is applied first and then reported as unverifiable, and writes completed before a later batch failure may remain applied.
-Raw `psu.scpi.query()` also returns a Deferred inside `psu.batch`.
-The already-assembled `psu.scpi.execute()` escape hatch cannot be nested inside either semantic context because it owns a separate immediate batch.
+Raw `psu.scpi.query()` can also be collected inside an `@psu.batch` function.
+The already-assembled `psu.scpi.execute()` escape hatch cannot be nested inside a batch or verification scope because it owns a separate immediate batch.
 
 ## Timing
 

@@ -481,11 +481,11 @@ def test_context_manager_closes_executor() -> None:
     assert executor.closed is True
 
 
-def test_batch_collects_semantic_writes_and_executes_once_on_exit() -> None:
+def test_batch_write_collects_semantic_writes_and_executes_once_on_exit() -> None:
     executor = FakeExecutor(responses_for("SPD3303X"))
     psu = SPD3000(executor)
 
-    with psu.batch:
+    with psu.batch_write:
         psu.ch1.voltage = 5.0
         psu.ch1.current = 0.5
         psu.ch1.output = True
@@ -498,19 +498,26 @@ def test_batch_discards_pending_operations_when_body_raises() -> None:
     executor = FakeExecutor(responses_for("SPD3303X", **{"CH1:VOLT?": ["5"]}))
     psu = SPD3000(executor)
 
-    voltage: Deferred[float]
-    with pytest.raises(RuntimeError, match="stop"), psu.batch:
+    captured: list[Deferred[float]] = []
+
+    @psu.batch
+    def fail() -> None:
         psu.ch1.voltage = 5.0
         voltage = psu.ch1.voltage
+        assert isinstance(voltage, Deferred)
+        captured.append(voltage)
         raise RuntimeError("stop")
 
+    with pytest.raises(RuntimeError, match="stop"):
+        fail()
+
     assert executor.commands == ["*IDN?"]
-    assert voltage.done is True
+    assert captured[0].done is True
     with pytest.raises(SPD3000DeferredResultError, match="cancelled"):
-        _ = voltage.value
+        _ = captured[0].value
 
 
-def test_batch_collects_mixed_writes_and_typed_queries_in_source_order() -> None:
+def test_batch_decorator_executes_mixed_operations_and_unwraps_return_value() -> None:
     executor = FakeExecutor(
         responses_for(
             "SPD3303X",
@@ -523,7 +530,8 @@ def test_batch_collects_mixed_writes_and_typed_queries_in_source_order() -> None
     )
     psu = SPD3000(executor)
 
-    with psu.batch:
+    @psu.batch
+    def configure_and_read() -> dict[str, object]:
         psu.ch1.voltage = 5.0
         voltage = psu.ch1.voltage
         current = psu.measure.current(Channel.CH1)
@@ -533,7 +541,12 @@ def test_batch_collects_mixed_writes_and_typed_queries_in_source_order() -> None
         assert executor.commands == ["*IDN?"]
         with pytest.raises(SPD3000DeferredResultError, match="pending"):
             _ = voltage.value
+        return {
+            "voltage": voltage,
+            "nested": [current, (output, raw)],
+        }
 
+    returned = configure_and_read()
     assert executor.batches[-1] == [
         "CH1:VOLT 5",
         "CH1:VOLT?",
@@ -541,23 +554,29 @@ def test_batch_collects_mixed_writes_and_typed_queries_in_source_order() -> None
         "SYST:STAT?",
         "SYST:STAT?",
     ]
-    assert voltage.value == 5.0
-    assert voltage.result() == 5.0
-    assert current.value == 0.125
-    assert output.value is True
-    assert raw.value == "0x10"
-    assert repr(voltage) == "Deferred(command='CH1:VOLT?', value=5.0)"
+    assert returned == {"voltage": 5.0, "nested": [0.125, (True, "0x10")]}
 
 
-def test_batch_still_rejects_nested_contexts() -> None:
+def test_batch_rejects_nested_decorated_calls_and_batch_write_queries() -> None:
     executor = FakeExecutor(responses_for("SPD3303X"))
     psu = SPD3000(executor)
 
-    with pytest.raises(SPD3000ValidationError, match="Nested"), psu.batch, psu.batch:
-        pass
+    @psu.batch
+    def inner() -> object:
+        return psu.idn
+
+    @psu.batch
+    def outer() -> object:
+        return inner()
+
+    with pytest.raises(SPD3000ValidationError, match="Nested"):
+        outer()
+
+    with pytest.raises(SPD3000ValidationError, match=r"psu\.batch_write"), psu.batch_write:
+        _ = psu.ch1.voltage
 
 
-def test_batch_resolves_structured_and_multi_query_results() -> None:
+def test_batch_decorator_unwraps_structured_and_multi_query_results() -> None:
     executor = FakeExecutor(
         responses_for(
             "SPD3303X",
@@ -577,46 +596,57 @@ def test_batch_resolves_structured_and_multi_query_results() -> None:
     )
     psu = SPD3000(executor)
 
-    with psu.batch:
-        identity = psu.idn
-        timer_step = psu.timer.set(Channel.CH1, 2)
-        system_error = psu.system.error
-        network = psu.network.settings
+    @psu.batch
+    def read_all() -> tuple[object, object, object, object]:
+        return (
+            psu.idn,
+            psu.timer.set(Channel.CH1, 2),
+            psu.system.error,
+            psu.network.settings,
+        )
 
-    assert isinstance(identity, Deferred)
-    assert isinstance(timer_step, Deferred)
-    assert isinstance(system_error, Deferred)
-    assert isinstance(network, Deferred)
-    assert identity.value.serial_number == "SPD0002"
-    assert timer_step.value == {"voltage_v": 3.0, "current_a": 0.5, "duration_s": 2.0}
-    assert system_error.value.code == -100
-    assert network.value.host == "192.168.1.50"
-    assert network.value.dhcp is False
+    identity, timer_step, system_error, network = read_all()
+    assert identity.serial_number == "SPD0002"
+    assert timer_step == {"voltage_v": 3.0, "current_a": 0.5, "duration_s": 2.0}
+    assert system_error.code == -100
+    assert network.host == "192.168.1.50"
+    assert network.dhcp is False
 
 
 def test_batch_query_parse_failure_raises_on_exit_and_remains_on_deferred() -> None:
     executor = FakeExecutor(responses_for("SPD3303X", **{"CH1:VOLT?": ["not-a-number"]}))
     psu = SPD3000(executor)
 
-    voltage: Deferred[float]
-    with pytest.raises(SPD3000ProtocolError, match="Malformed VOLT"), psu.batch:
+    captured: list[Deferred[float]] = []
+
+    @psu.batch
+    def read_voltage() -> object:
         voltage = psu.ch1.voltage
+        assert isinstance(voltage, Deferred)
+        captured.append(voltage)
+        return voltage
 
-    assert voltage.done is True
     with pytest.raises(SPD3000ProtocolError, match="Malformed VOLT"):
-        _ = voltage.value
+        read_voltage()
+
+    assert captured[0].done is True
+    with pytest.raises(SPD3000ProtocolError, match="Malformed VOLT"):
+        _ = captured[0].value
 
 
-def test_batch_user_queries_compose_with_write_verification_queries() -> None:
+def test_batch_decorator_queries_compose_with_write_verification_queries() -> None:
     executor = FakeExecutor(responses_for("SPD3303X", **{"CH1:VOLT?": ["5", "5"]}))
     psu = SPD3000(executor)
 
-    with psu.batch, psu.verify:
-        psu.ch1.voltage = 5.0
-        voltage = psu.ch1.voltage
+    @psu.batch
+    def configure_and_read() -> object:
+        with psu.verify:
+            psu.ch1.voltage = 5.0
+        return psu.ch1.voltage
 
+    voltage = configure_and_read()
     assert executor.batches[-1] == ["CH1:VOLT 5", "CH1:VOLT?", "CH1:VOLT?"]
-    assert voltage.value == 5.0
+    assert voltage == 5.0
 
 
 def test_verify_executes_each_setter_as_its_own_write_query_batch() -> None:
@@ -654,7 +684,7 @@ def test_batch_and_verify_compose_into_one_non_interleaved_batch() -> None:
     )
     psu = SPD3000(executor)
 
-    with psu.batch, psu.verify:
+    with psu.batch_write, psu.verify:
         psu.ch1.voltage = 5.0
         psu.ch1.current = 0.5
         psu.ch1.output = True

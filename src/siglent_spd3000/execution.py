@@ -106,7 +106,7 @@ class Deferred(Generic[_T]):
             raise self._error
         if self._value is _PENDING:
             raise SPD3000DeferredResultError(
-                f"Query {self.command!r} is pending until the psu.batch context exits"
+                f"Query {self.command!r} is pending until its batch execution completes"
             )
         return cast(_T, self._value)
 
@@ -123,7 +123,7 @@ class Deferred(Generic[_T]):
 
     def _cancel(self) -> None:
         self._error = SPD3000DeferredResultError(
-            f"Query {self.command!r} was cancelled because the psu.batch body did not complete"
+            f"Query {self.command!r} was cancelled because its batch function did not complete"
         )
 
     def __repr__(self) -> str:

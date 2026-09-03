@@ -7,9 +7,10 @@ import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from functools import wraps
 from ipaddress import AddressValueError, IPv4Address, IPv4Network, NetmaskValueError
 from types import TracebackType
-from typing import Generic, TypeVar, cast, overload
+from typing import Generic, ParamSpec, TypeVar, cast, overload
 
 from ._constants import DEFAULT_GATEWAY_PORT, DEFAULT_SCPI_PORT
 from .exceptions import (
@@ -50,6 +51,8 @@ from .models import (
 from .transport import SocketTransport, VisaTransport, VXI11Transport
 
 _T = TypeVar("_T")
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
 
 
 def _require_channel(value: Channel | str, *, programmable: bool = False) -> Channel:
@@ -241,14 +244,58 @@ class _PendingRead(Generic[_T]):
 _PendingOperation = _PendingWrite | _PendingRead[object]
 
 
-class _BatchContext:
-    """Collect ordered writes and deferred queries for one execution."""
+def _unwrap_batch_return(value: object) -> object:
+    if isinstance(value, Deferred):
+        return value.value
+    if isinstance(value, tuple):
+        items = tuple(_unwrap_batch_return(item) for item in value)
+        if hasattr(value, "_fields"):
+            constructor = cast(Callable[..., object], type(value))
+            return constructor(*items)
+        return items
+    if isinstance(value, list):
+        return [_unwrap_batch_return(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            _unwrap_batch_return(key): _unwrap_batch_return(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, set):
+        return {_unwrap_batch_return(item) for item in value}
+    if isinstance(value, frozenset):
+        return frozenset(_unwrap_batch_return(item) for item in value)
+    return value
+
+
+class _BatchDecorator:
+    """Execute a function as one mixed batch and unwrap its returned queries."""
+
+    def __init__(self, device: SPD3000) -> None:
+        self._device = device
+
+    def __call__(self, function: Callable[_P, _R]) -> Callable[_P, _R]:
+        @wraps(function)
+        def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+            self._device._begin_batch(allow_queries=True)
+            try:
+                returned = function(*args, **kwargs)
+            except BaseException:
+                self._device._end_batch(execute=False)
+                raise
+            self._device._end_batch(execute=True)
+            return cast(_R, _unwrap_batch_return(returned))
+
+        return wrapped
+
+
+class _BatchWriteContext:
+    """Collect writes for one execution while rejecting user queries."""
 
     def __init__(self, device: SPD3000) -> None:
         self._device = device
 
     def __enter__(self) -> SPD3000:
-        self._device._begin_batch()
+        self._device._begin_batch(allow_queries=False)
         return self._device
 
     def __exit__(
@@ -708,12 +755,12 @@ class RawSCPI:
 class SPD3000:
     """Semantic SPD3303X/X-E/C driver over an injected command executor.
 
-    ``batch`` collects semantic writes and queries for one non-interleaved
-    execution. Queries collected inside that context return typed
-    :class:`Deferred` results that resolve when the context exits.
+    ``batch`` decorates a function whose writes and queries execute as one
+    non-interleaved batch; Deferred query returns are unwrapped in the decorated
+    function's return value. ``batch_write`` is a query-free context manager.
     ``verify`` adds supported readbacks and raises
     :class:`SPD3000VerificationError` when a completed write cannot be verified.
-    The reusable context managers compose as ``with psu.batch, psu.verify:``.
+    The reusable contexts compose as ``with psu.batch_write, psu.verify:``.
     """
 
     def __init__(self, executor: Executor) -> None:
@@ -723,9 +770,11 @@ class SPD3000:
         self._closed = False
         self._operation_lock = threading.RLock()
         self._batch_active = False
+        self._batch_queries_allowed = False
         self._pending_operations: list[_PendingOperation] = []
         self._verify_depth = 0
-        self.batch = _BatchContext(self)
+        self.batch = _BatchDecorator(self)
+        self.batch_write = _BatchWriteContext(self)
         self.verify = _VerifyContext(self)
         try:
             identity = self._query("*IDN?", parse_identification)
@@ -1187,17 +1236,22 @@ class SPD3000:
             deferred: Deferred[_T] = Deferred(label)
             pending = _PendingRead(commands, parser, deferred)
             if self._batch_active:
+                if not self._batch_queries_allowed:
+                    raise SPD3000ValidationError(
+                        "Queries cannot be used inside with psu.batch_write"
+                    )
                 self._pending_operations.append(cast(_PendingRead[object], pending))
                 return deferred
             self._execute_pending_operations([cast(_PendingRead[object], pending)])
             return deferred.value
 
-    def _begin_batch(self) -> None:
+    def _begin_batch(self, *, allow_queries: bool) -> None:
         self._operation_lock.acquire()
         if self._batch_active:
             self._operation_lock.release()
-            raise SPD3000ValidationError("Nested psu.batch contexts are not supported")
+            raise SPD3000ValidationError("Nested batch executions are not supported")
         self._batch_active = True
+        self._batch_queries_allowed = allow_queries
         self._pending_operations = []
 
     def _end_batch(self, *, execute: bool) -> None:
@@ -1205,6 +1259,7 @@ class SPD3000:
             pending = self._pending_operations
             self._pending_operations = []
             self._batch_active = False
+            self._batch_queries_allowed = False
             if execute and pending:
                 self._execute_pending_operations(pending)
             elif not execute:
@@ -1375,7 +1430,7 @@ class SPD3000:
         with self._operation_lock:
             if self._batch_active:
                 raise SPD3000ValidationError(
-                    "psu.scpi.execute() cannot run inside a collecting psu.batch context"
+                    "psu.scpi.execute() cannot run inside a batch collection scope"
                 )
             if self._verify_depth:
                 raise SPD3000ValidationError(
