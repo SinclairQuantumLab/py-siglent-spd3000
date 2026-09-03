@@ -88,7 +88,6 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
         "psu.output.wave",
         "with psu.batch, psu.verify:",
         "with psu.batch:",
-        "with psu.verify:",
         "psu.lock()",
         "psu.close()",
         "Cancelled before sending any write command",
@@ -114,6 +113,9 @@ def test_notebook_exercises_public_driver_paths_with_safety_gates() -> None:
     assert "asdict(" not in notebook_text
     assert "json.dumps" not in notebook_text
     assert "ENERGIZE_OUTPUT = False" in notebook_text
+    assert "[1/6] Write: OUTPut" in notebook_text
+    assert "[4/6] Query:" in notebook_text
+    assert "Atomic setpoint round trip passed." in notebook_text
     assert "RUN_CH3_OUTPUT_TEST = False" in notebook_text
     assert "RUN_TIMER_WAVEFORM_TEST = False" in notebook_text
     assert "RUN_FRONT_PANEL_LOCK_TEST = False" in notebook_text
