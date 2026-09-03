@@ -81,8 +81,7 @@ def test_notebook_demonstrates_manual_scpi_command_discovery() -> None:
     discovery_index = next(
         index
         for index, cell in enumerate(notebook["cells"])
-        if cell["cell_type"] == "code"
-        and "SCPI_COMMAND_FROM_MANUAL" in "".join(cell["source"])
+        if cell["cell_type"] == "code" and "SCPI_COMMAND_FROM_MANUAL" in "".join(cell["source"])
     )
     guide = "".join(notebook["cells"][discovery_index - 1]["source"])
     example = "".join(notebook["cells"][discovery_index]["source"])
@@ -155,19 +154,37 @@ def test_notebook_orders_control_verification_batching_and_diagnostics() -> None
     assert "psu.ch1.voltage = current_voltage" in notebook_text
     assert "psu.ch1.current = current_limit" in notebook_text
     assert "psu.ch1.output = current_output" in notebook_text
-    batch_syntax_index = next(
-        index
-        for index, cell in enumerate(notebook["cells"])
-        if "".join(cell["source"]).startswith("## 8. Batch")
-    )
-    batch_example = "".join(notebook["cells"][batch_syntax_index + 1]["source"])
-    assert "# Context-manager form" in batch_example
-    assert "with psu.batch():" in batch_example
-    assert "# Decorator form" in batch_example
-    assert "@psu.batch" in batch_example
-    assert "def read_ch1():" in batch_example
-    assert "ch1_voltage, ch1_current_limit, ch1_output = read_ch1()" in batch_example
-    assert "with psu.batch(), psu.verify_writes():" in batch_example
+    batch_overview = sections["## 8. Batch execution"]
+    assert "only explicit user-query results in source order" in batch_overview
+    assert "writes and automatic verification readbacks are omitted" in batch_overview
+    assert "not rollback" in batch_overview
+
+    batch_examples = {}
+    for title in (
+        "### 8.1 Context manager and responses",
+        "### 8.2 Decorator",
+        "### 8.3 Batch with write verification",
+    ):
+        index = next(
+            index
+            for index, cell in enumerate(notebook["cells"])
+            if "".join(cell["source"]).startswith(title)
+        )
+        batch_examples[title] = "".join(notebook["cells"][index + 1]["source"])
+
+    context_example = batch_examples["### 8.1 Context manager and responses"]
+    assert "with psu.batch() as responses:" in context_example
+    assert "print(responses.values)" in context_example
+    assert "ch1_voltage, ch1_current_limit, ch1_output = responses" in context_example
+
+    decorator_example = batch_examples["### 8.2 Decorator"]
+    assert "@psu.batch" in decorator_example
+    assert "def configure_and_read():" in decorator_example
+    assert "ch1_set_voltage, ch1_measured_voltage = configure_and_read()" in decorator_example
+
+    verification_example = batch_examples["### 8.3 Batch with write verification"]
+    assert "with psu.batch() as responses, psu.verify_writes():" in verification_example
+    assert "verified_voltage, verified_current_limit = responses" in verification_example
 
 
 def test_notebook_exercises_public_driver_paths_with_safety_guidance() -> None:

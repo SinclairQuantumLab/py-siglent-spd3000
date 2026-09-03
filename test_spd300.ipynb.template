@@ -239,8 +239,19 @@
    "source": [
     "## 8. Batch execution\n",
     "\n",
-    "`with psu.batch():` groups ordinary operations directly, while `@psu.batch` applies the same behavior to a function and resolves returned query values.\n",
-    "Combine `psu.batch()` with `psu.verify_writes()` to keep writes and their verification readbacks in one non-interleaved batch."
+    "Batch execution postpones I/O until the context or decorated function exits and sends the collected commands as one non-interleaved sequence.\n",
+    "`responses` is pending inside the block and afterward contains only explicit user-query results in source order; writes and automatic verification readbacks are omitted.\n",
+    "Batching guarantees ordering and non-interleaving, not rollback."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 8.1 Context manager and responses\n",
+    "\n",
+    "Setters add writes, while property reads and query methods add parsed results to `responses`.\n",
+    "After the context exits, `responses` supports `.values`, indexing, iteration, and unpacking."
    ]
   },
   {
@@ -249,25 +260,70 @@
    "metadata": {},
    "outputs": [],
    "source": [
-    "# Context-manager form\n",
-    "with psu.batch():\n",
+    "with psu.batch() as responses:\n",
     "    psu.ch1.voltage = 1.0\n",
     "    psu.ch1.current = 0.1\n",
-    "    psu.ch1.output = True\n",
+    "    psu.ch1.output = False\n",
+    "    _ = psu.ch1.voltage\n",
+    "    _ = psu.ch1.current\n",
+    "    _ = psu.ch1.output\n",
     "\n",
-    "# Decorator form\n",
+    "print(responses)\n",
+    "print(responses.values)\n",
+    "ch1_voltage, ch1_current_limit, ch1_output = responses\n",
+    "print(ch1_voltage, ch1_current_limit, ch1_output)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 8.2 Decorator\n",
+    "\n",
+    "`@psu.batch` uses the same batch context and resolves deferred values contained in the function's returned built-in containers."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
     "@psu.batch\n",
-    "def read_ch1():\n",
-    "    return psu.ch1.voltage, psu.ch1.current, psu.ch1.output\n",
+    "def configure_and_read():\n",
+    "    psu.ch1.voltage = 1.0\n",
+    "    return psu.ch1.voltage, psu.measure.voltage(spd.Channel.CH1)\n",
     "\n",
-    "ch1_voltage, ch1_current_limit, ch1_output = read_ch1()\n",
-    "print(ch1_voltage, ch1_current_limit, ch1_output)\n",
+    "ch1_set_voltage, ch1_measured_voltage = configure_and_read()\n",
+    "print(ch1_set_voltage)\n",
+    "print(ch1_measured_voltage)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 8.3 Batch with write verification\n",
     "\n",
-    "# Batch writes and their verification readbacks together\n",
-    "with psu.batch(), psu.verify_writes():\n",
-    "    psu.ch1.voltage = ch1_voltage\n",
-    "    psu.ch1.current = ch1_current_limit\n",
-    "    psu.ch1.output = ch1_output"
+    "Combining `psu.batch()` with `psu.verify_writes()` keeps writes and their readbacks in one batch.\n",
+    "The automatic readbacks perform verification but do not appear in `responses`; only the two explicit queries below are returned."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "with psu.batch() as responses, psu.verify_writes():\n",
+    "    psu.ch1.voltage = 1.0\n",
+    "    psu.ch1.current = 0.1\n",
+    "    psu.ch1.output = False\n",
+    "    _ = psu.ch1.voltage\n",
+    "    _ = psu.ch1.current\n",
+    "\n",
+    "verified_voltage, verified_current_limit = responses\n",
+    "print(verified_voltage, verified_current_limit)"
    ]
   },
   {
