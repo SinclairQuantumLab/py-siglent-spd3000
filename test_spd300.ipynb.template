@@ -326,6 +326,23 @@
    ]
   },
   {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "@psu.batch\n",
+    "def configure_and_read():\n",
+    "    with psu.verify_writes():\n",
+    "        psu.ch1.voltage = 1.0\n",
+    "\n",
+    "    return psu.ch1.voltage, psu.measure.voltage(spd.Channel.CH1)\n",
+    "\n",
+    "ch1_set_voltage, ch1_measured_voltage = configure_and_read()\n",
+    "print(ch1_set_voltage, ch1_measured_voltage)"
+   ]
+  },
+  {
    "cell_type": "markdown",
    "metadata": {},
    "source": [

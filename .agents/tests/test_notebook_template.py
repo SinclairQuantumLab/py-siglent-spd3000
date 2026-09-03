@@ -188,6 +188,17 @@ def test_notebook_orders_control_verification_batching_and_diagnostics() -> None
     verification_example = batch_examples["### 8.3 Batch with write verification"]
     assert "with psu.batch() as responses, psu.verify_writes():" in verification_example
     assert "verified_voltage, verified_current_limit = responses" in verification_example
+    verification_heading_index = next(
+        index
+        for index, cell in enumerate(notebook["cells"])
+        if "".join(cell["source"]).startswith("### 8.3 Batch with write verification")
+    )
+    decorated_verification = "".join(
+        notebook["cells"][verification_heading_index + 2]["source"]
+    )
+    assert decorated_verification.startswith("@psu.batch\ndef configure_and_read():")
+    assert "    with psu.verify_writes():" in decorated_verification
+    assert "    return psu.ch1.voltage, psu.measure.voltage" in decorated_verification
 
 
 def test_notebook_exercises_public_driver_paths_with_safety_guidance() -> None:
