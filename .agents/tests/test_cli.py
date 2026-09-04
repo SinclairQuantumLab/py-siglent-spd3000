@@ -88,6 +88,8 @@ def test_gateway_serve_reports_physical_connection_and_identity(
     instrument = SimpleNamespace(
         connection=ConnectionType.SOCKET,
         identifier="192.168.1.50",
+        visa_backend=None,
+        execution=executor.settings,
         open_executor=lambda: executor,
     )
     settings = SimpleNamespace(
@@ -124,8 +126,19 @@ def test_gateway_serve_reports_physical_connection_and_identity(
         in messages
     )
     assert (
-        "physical instrument connected and identified: "
-        "Siglent Technologies SPD3303X, serial SPD0001, firmware 1.0"
+        "SIGLENT SPD3000 Series gateway physical instrument connection\n"
+        "- Identification:\n"
+        "  - Manufacturer: Siglent Technologies\n"
+        "  - Model: SPD3303X\n"
+        "  - Serial number: SPD0001\n"
+        "  - Firmware version: 1.0\n"
+        "- Connection:\n"
+        "  - Type: socket\n"
+        "  - Identifier: 192.168.1.50\n"
+        "  - State: open\n"
+        "- Execution settings:\n"
+        "  - Timeout: 5 s\n"
+        "  - Minimum command interval: 100 ms"
         in messages
     )
     assert "shutdown requested by Ctrl+C" in messages

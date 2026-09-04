@@ -13,6 +13,7 @@ from .exceptions import GatewayError, SPD3000Error, SPD3000ProtocolError
 from .execution import CommandBatch, Executor, Query
 from .gateway import GatewayServer
 from .gateway.config import (
+    InstrumentSettings,
     create_gateway_config_files,
     load_gateway_auth,
     load_gateway_settings,
@@ -44,6 +45,36 @@ def _identify_gateway_instrument(executor: Executor) -> Identification:
     if response is None:
         raise SPD3000ProtocolError("The startup *IDN? query returned no response")
     return parse_identification(response)
+
+
+def _gateway_instrument_summary(
+    identity: Identification, settings: InstrumentSettings
+) -> str:
+    lines = [
+        "SIGLENT SPD3000 Series gateway physical instrument connection",
+        "- Identification:",
+        f"  - Manufacturer: {identity.manufacturer}",
+        f"  - Model: {identity.model.value}",
+        f"  - Serial number: {identity.serial_number}",
+        f"  - Firmware version: {identity.firmware_version}",
+        "- Connection:",
+        f"  - Type: {settings.connection.value}",
+        f"  - Identifier: {settings.identifier}",
+    ]
+    if settings.connection is ConnectionType.VISA:
+        lines.append(f"  - VISA backend: {settings.visa_backend or 'default'}")
+    lines.extend(
+        (
+            "  - State: open",
+            "- Execution settings:",
+            f"  - Timeout: {settings.execution.timeout:.15g} s",
+            (
+                "  - Minimum command interval: "
+                f"{settings.execution.min_command_interval * 1000:.15g} ms"
+            ),
+        )
+    )
+    return "\n".join(lines)
 
 
 def _channel(value: str) -> Channel:
@@ -197,14 +228,7 @@ def _run(args: argparse.Namespace) -> int:
         executor = settings.instrument.open_executor()
         try:
             identity = _identify_gateway_instrument(executor)
-            logger.info(
-                "physical instrument connected and identified: %s %s, "
-                "serial %s, firmware %s",
-                identity.manufacturer,
-                identity.model.value,
-                identity.serial_number,
-                identity.firmware_version,
-            )
+            logger.info(_gateway_instrument_summary(identity, settings.instrument))
             server = GatewayServer(
                 executor,
                 host=settings.bind,
