@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -17,6 +18,18 @@ from .gateway.config import (
 )
 from .models import Channel, ConnectionType, OutputState
 from .scpi import lookup_command
+
+_GATEWAY_LOGGER_NAME = "siglent_spd3000.gateway.server"
+
+
+def _configure_gateway_request_logging() -> None:
+    logger = logging.getLogger(_GATEWAY_LOGGER_NAME)
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("[%(asctime)s] %(message)s", datefmt="%H:%M:%S"))
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
 
 def _channel(value: str) -> Channel:
@@ -157,6 +170,7 @@ def _run(args: argparse.Namespace) -> int:
             for created in create_gateway_config_files(args.directory):
                 print(f"Created {created}")
             return 0
+        _configure_gateway_request_logging()
         settings = load_gateway_settings(args.config)
         auth_path = args.auth or settings.source.with_name("gateway-auth.toml")
         token = load_gateway_auth(auth_path, required=args.auth is not None)

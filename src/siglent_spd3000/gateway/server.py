@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hmac
 import ipaddress
+import json
+import logging
 import queue
 import socketserver
 import threading
@@ -22,7 +24,7 @@ from ..exceptions import (
     GatewayProtocolError,
     GatewayVersionMismatchError,
 )
-from ..execution import BatchResult, CommandBatch, ExecutionSettings, Executor
+from ..execution import BatchResult, CommandBatch, ExecutionSettings, Executor, Query
 from .protocol import (
     MAX_BATCH_COMMANDS,
     MAX_MESSAGE_BYTES,
@@ -31,6 +33,8 @@ from .protocol import (
     encode_message,
     serialize_exception,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -146,12 +150,15 @@ class GatewayServer:
 
     def _handle(self, handler: socketserver.StreamRequestHandler) -> None:
         session: _Session | None = None
+        client = _client_label(handler.client_address)
         while True:
             line = handler.rfile.readline(MAX_MESSAGE_BYTES + 2)
             if not line:
                 return
             request_id: Any = None
             close_after = False
+            method: Any = None
+            started_at = time.monotonic()
             try:
                 if len(line) > MAX_MESSAGE_BYTES + 1 or not line.endswith(b"\n"):
                     raise GatewayProtocolError("Request exceeded limits or lacked LF")
@@ -166,17 +173,34 @@ class GatewayServer:
                         raise GatewayProtocolError("handshake must be the first request")
                     session = self._handshake(params)
                     result: Any = {"commit": self._commit}
+                    _LOGGER.info("client=%s handshake accepted", client)
                 elif method == "execute":
-                    result = self._execute(params, session)
+                    result = self._execute(params, session, client=client)
+                    _LOGGER.info(
+                        "client=%s completed elapsed=%.3fs",
+                        client,
+                        time.monotonic() - started_at,
+                    )
                 elif method == "ping":
                     result = {"ok": True}
+                    _LOGGER.info("client=%s ping", client)
                 elif method == "close":
                     result = {"closed": True}
                     close_after = True
+                    _LOGGER.info("client=%s session closed", client)
                 else:
                     raise GatewayProtocolError(f"Unknown gateway method: {method!r}")
                 response = {"jsonrpc": "2.0", "id": request_id, "result": result}
             except BaseException as exc:
+                operation = method if isinstance(method, str) else "request"
+                _LOGGER.error(
+                    "client=%s %s failed elapsed=%.3fs %s: %s",
+                    client,
+                    operation,
+                    time.monotonic() - started_at,
+                    type(exc).__name__,
+                    exc,
+                )
                 remote_traceback = getattr(exc, "gateway_remote_traceback", traceback.format_exc())
                 response = {
                     "jsonrpc": "2.0",
@@ -216,13 +240,20 @@ class GatewayServer:
             raise GatewayProtocolError(f"Invalid execution settings: {exc}") from exc
         return _Session(execution_settings)
 
-    def _execute(self, params: dict[str, Any], session: _Session) -> dict[str, Any]:
+    def _execute(
+        self,
+        params: dict[str, Any],
+        session: _Session,
+        *,
+        client: str,
+    ) -> dict[str, Any]:
         commands = params.get("commands")
         if not isinstance(commands, list) or not commands:
             raise GatewayProtocolError("execute.commands must be a non-empty list")
         if len(commands) > MAX_BATCH_COMMANDS:
             raise GatewayProtocolError("Batch exceeds 256 commands")
         batch = CommandBatch([deserialize_command(command) for command in commands])
+        _log_batch(client, batch)
         try:
             result = self._owner.execute(batch, session.settings)
         except BaseException as exc:
@@ -255,3 +286,32 @@ def _is_loopback(host: str) -> bool:
         return ipaddress.ip_address(host).is_loopback
     except ValueError:
         return False
+
+
+def _client_label(address: Any) -> str:
+    if isinstance(address, tuple) and len(address) >= 2:
+        host = str(address[0])
+        port = address[1]
+        if ":" in host:
+            return f"[{host}]:{port}"
+        return f"{host}:{port}"
+    return str(address)
+
+
+def _log_batch(client: str, batch: CommandBatch) -> None:
+    descriptions = [
+        (
+            "query" if isinstance(command, Query) else "write",
+            json.dumps(command.text),
+        )
+        for command in batch.commands
+    ]
+    if len(descriptions) == 1:
+        kind, command = descriptions[0]
+        _LOGGER.info("client=%s %s %s", client, kind, command)
+        return
+    lines = "\n".join(
+        f"  {index}. {kind} {command}"
+        for index, (kind, command) in enumerate(descriptions, start=1)
+    )
+    _LOGGER.info("client=%s batch commands=%d\n%s", client, len(descriptions), lines)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import socket
 import threading
 import time
@@ -79,6 +80,59 @@ def test_gateway_executes_one_persistent_session() -> None:
     assert result.values == (None, "answer")
     assert physical.batches == [["A", "Q?"]]
     assert physical.closed is True
+
+
+def test_gateway_logs_requests_without_exposing_authentication_token(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    physical = PhysicalExecutor({"Q?": ["response-one"], "B?": ["response-two"]})
+    with (
+        caplog.at_level(logging.INFO, logger="siglent_spd3000.gateway.server"),
+        running_server(physical, token="private-token") as server,
+        GatewayExecutor(
+            "127.0.0.1",
+            port=server.port,
+            token="private-token",
+            settings=ExecutionSettings(0.01),
+        ) as executor,
+    ):
+        executor.execute(CommandBatch([Query("Q?")]))
+        executor.execute(CommandBatch([Write("A"), Query("B?")]))
+        executor.ping()
+
+    messages = "\n".join(record.getMessage() for record in caplog.records)
+    assert "handshake accepted" in messages
+    assert 'query "Q?"' in messages
+    assert "batch commands=2" in messages
+    assert '1. write "A"' in messages
+    assert '2. query "B?"' in messages
+    assert "completed elapsed=" in messages
+    assert "ping" in messages
+    assert "session closed" in messages
+    assert "private-token" not in messages
+    assert "response-one" not in messages
+    assert "response-two" not in messages
+
+
+def test_gateway_logs_request_failures(caplog: pytest.LogCaptureFixture) -> None:
+    physical = PhysicalExecutor()
+    physical.error = SPD3000TimeoutError("device timed out")
+    with (
+        caplog.at_level(logging.INFO, logger="siglent_spd3000.gateway.server"),
+        running_server(physical) as server,
+    ):
+        executor = GatewayExecutor(
+            "127.0.0.1", port=server.port, settings=ExecutionSettings(0.01)
+        )
+        try:
+            with pytest.raises(SPD3000TimeoutError):
+                executor.execute(CommandBatch([Query("Q?")]))
+        finally:
+            executor.close()
+
+    messages = "\n".join(record.getMessage() for record in caplog.records)
+    assert "execute failed elapsed=" in messages
+    assert "SPD3000TimeoutError: device timed out" in messages
 
 
 def test_semantic_verified_batch_reaches_gateway_as_one_batch() -> None:

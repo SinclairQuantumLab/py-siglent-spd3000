@@ -545,6 +545,8 @@ spd3000 gateway serve
 Use `--config <SETTINGS_PATH>` and `--auth <AUTH_PATH>` only when the files have different names or locations.
 If `--auth` is omitted, the server looks for `gateway-auth.toml` beside the settings file.
 The command keeps running until it is stopped.
+The server console logs accepted handshakes, each SCPI write/query or batch, completion time, and failures.
+Authentication tokens and response bodies are never logged.
 
 > **NOTE:** When installed with `uv`, run `uv run spd3000 gateway serve` instead.
 
