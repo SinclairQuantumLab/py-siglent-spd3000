@@ -9,14 +9,21 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .driver import SPD3000
-from .exceptions import GatewayError, SPD3000Error
+from .exceptions import GatewayError, SPD3000Error, SPD3000ProtocolError
+from .execution import CommandBatch, Executor, Query
 from .gateway import GatewayServer
 from .gateway.config import (
     create_gateway_config_files,
     load_gateway_auth,
     load_gateway_settings,
 )
-from .models import Channel, ConnectionType, OutputState
+from .models import (
+    Channel,
+    ConnectionType,
+    Identification,
+    OutputState,
+    parse_identification,
+)
 from .scpi import lookup_command
 
 _GATEWAY_LOGGER_NAME = "siglent_spd3000.gateway.server"
@@ -30,6 +37,13 @@ def _configure_gateway_request_logging() -> None:
         logger.addHandler(handler)
     logger.setLevel(logging.INFO)
     logger.propagate = False
+
+
+def _identify_gateway_instrument(executor: Executor) -> Identification:
+    response = executor.execute(CommandBatch([Query("*IDN?")])).values[0]
+    if response is None:
+        raise SPD3000ProtocolError("The startup *IDN? query returned no response")
+    return parse_identification(response)
 
 
 def _channel(value: str) -> Channel:
@@ -174,8 +188,23 @@ def _run(args: argparse.Namespace) -> int:
         settings = load_gateway_settings(args.config)
         auth_path = args.auth or settings.source.with_name("gateway-auth.toml")
         token = load_gateway_auth(auth_path, required=args.auth is not None)
+        logger = logging.getLogger(_GATEWAY_LOGGER_NAME)
+        logger.info(
+            "opening physical instrument connection: type=%s identifier=%s",
+            settings.instrument.connection.value,
+            settings.instrument.identifier,
+        )
         executor = settings.instrument.open_executor()
         try:
+            identity = _identify_gateway_instrument(executor)
+            logger.info(
+                "physical instrument connected and identified: %s %s, "
+                "serial %s, firmware %s",
+                identity.manufacturer,
+                identity.model.value,
+                identity.serial_number,
+                identity.firmware_version,
+            )
             server = GatewayServer(
                 executor,
                 host=settings.bind,
@@ -183,7 +212,9 @@ def _run(args: argparse.Namespace) -> int:
                 token=token,
             )
         except Exception:
+            logger.info("gateway startup failed; closing physical instrument connection")
             executor.close()
+            logger.info("physical instrument connection closed")
             raise
         try:
             print(
@@ -191,7 +222,7 @@ def _run(args: argparse.Namespace) -> int:
             )
             server.serve_forever()
         except KeyboardInterrupt:
-            logging.getLogger(_GATEWAY_LOGGER_NAME).info("shutdown requested by Ctrl+C")
+            logger.info("shutdown requested by Ctrl+C")
         finally:
             server.close()
         return 0
