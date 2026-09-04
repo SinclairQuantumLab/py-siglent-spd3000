@@ -131,7 +131,8 @@
     "```\n",
     "\n",
     "After the server reports that it is listening, run the code cell below.\n",
-    "Use `localhost` when the gateway runs on this computer, or replace it with the gateway computer's hostname or `host[:port]`; keep the token line when the server uses `gateway-auth.toml`."
+    "Use `localhost` when the gateway runs on this computer, or replace it with the gateway computer's hostname or `host[:port]`.\n",
+    "The token loader returns `None` when `gateway-auth.toml` is absent or has no non-empty `token` field, so the same cell works whether authentication is enabled or disabled."
    ]
   },
   {

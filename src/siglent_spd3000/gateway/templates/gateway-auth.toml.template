@@ -1,7 +1,9 @@
+# This file is optional.
+# Authentication is disabled when this file is absent or has no non-empty token field.
 # Any non-empty custom string is a valid token.
 # A long, random, hard-to-guess token is strongly recommended for remote access.
 # One optional way to generate one is:
 # python -c "import secrets; print(secrets.token_urlsafe(32))"
 # Do not commit gateway-auth.toml to Git.
 
-token = ""
+# token = "replace-this-example-with-a-private-token"

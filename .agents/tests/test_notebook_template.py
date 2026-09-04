@@ -138,6 +138,7 @@ def test_section_one_has_a_gateway_specific_connection_example() -> None:
     assert guide.startswith("### 1.2 Connection through the gateway")
     assert "Close any direct `psu` connection" in guide
     assert "spd3000 gateway serve" in guide
+    assert "returns `None` when `gateway-auth.toml` is absent" in guide
     assert "connection=spd.ConnectionType.GATEWAY" in example
     assert 'identifier="localhost"' in example
     assert 'token=spd.load_gateway_auth("gateway-auth.toml")' in example

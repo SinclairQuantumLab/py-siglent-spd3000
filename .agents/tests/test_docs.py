@@ -142,6 +142,7 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "each SCPI write/query or batch" in readme
     assert "`queued` or `executing` heartbeat notifications" in readme
     assert "client consumes these notifications automatically" in readme
+    assert "startup log states whether token authentication is enabled or disabled" in readme
     assert "Authentication tokens and ordinary command response bodies are never logged" in readme
     assert "startup identity fields are the deliberate exception" in readme
     assert "physical instrument connection closed" in readme
@@ -157,7 +158,10 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "TCP port 8765" in readme
     assert "TCP 5025" in readme
     assert "connection=spd.ConnectionType.GATEWAY" in readme
-    assert "A remotely accessible gateway uses token authentication" in readme
+    assert "Token authentication is optional regardless of the gateway bind address" in readme
+    assert "file is absent or contains no non-empty `token` field" in readme
+    assert "accepts commands from every compatible client that can reach its TCP port" in readme
+    assert "Token authentication restricts clients but does not encrypt the protocol" in readme
 
 
 def test_readme_has_table_of_contents_for_major_sections() -> None:

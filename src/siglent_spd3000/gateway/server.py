@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hmac
-import ipaddress
 import json
 import logging
 import queue
@@ -132,7 +131,9 @@ class GatewayServer:
 
     The gateway owns no semantic methods. It accepts only raw write/query
     batches, serializes them through one physical owner, and relies on the same
-    package revision for validation policy and canonical exceptions.
+    package revision for validation policy and canonical exceptions. A non-empty
+    token enables authentication; ``None`` or an empty string accepts every
+    compatible client that can reach the listener.
     """
 
     def __init__(
@@ -143,11 +144,9 @@ class GatewayServer:
         port: int = DEFAULT_GATEWAY_PORT,
         token: str | None = None,
     ) -> None:
-        if not _is_loopback(host) and not token:
-            raise GatewayAuthenticationError("A token is required when binding outside loopback")
         self.host = host
         self.port = port
-        self._token = token
+        self._token = token or None
         self._commit = get_commit()
         if self._commit == UNKNOWN_COMMIT:
             raise GatewayVersionMismatchError("Gateway Git commit is unavailable")
@@ -336,16 +335,6 @@ class GatewayServer:
 
     def __exit__(self, *_args: object) -> None:
         self.close()
-
-
-def _is_loopback(host: str) -> bool:
-    if host.lower() == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        return False
-
 
 def _client_label(address: Any) -> str:
     if isinstance(address, tuple) and len(address) >= 2:

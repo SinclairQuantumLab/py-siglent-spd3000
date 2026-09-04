@@ -55,9 +55,9 @@ class PhysicalExecutor:
 
 @contextmanager
 def running_server(
-    executor: PhysicalExecutor, *, token: str | None = None
+    executor: PhysicalExecutor, *, host: str = "127.0.0.1", token: str | None = None
 ) -> Iterator[GatewayServer]:
-    server = GatewayServer(executor, port=0, token=token)
+    server = GatewayServer(executor, host=host, port=0, token=token)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -203,10 +203,19 @@ def test_gateway_token_authentication() -> None:
         )
 
 
-def test_gateway_rejects_non_loopback_without_token() -> None:
+def test_gateway_allows_non_loopback_without_token() -> None:
     physical = PhysicalExecutor()
-    with pytest.raises(GatewayAuthenticationError):
-        GatewayServer(physical, host="0.0.0.0", port=0)
+    with (
+        running_server(physical, host="0.0.0.0") as server,
+        GatewayExecutor(
+            "127.0.0.1",
+            port=server.port,
+            settings=ExecutionSettings(0.01),
+        ) as executor,
+    ):
+        executor.ping()
+
+    assert physical.closed is True
 
 
 def test_gateway_rejects_different_commit() -> None:

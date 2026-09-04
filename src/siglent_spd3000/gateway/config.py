@@ -202,9 +202,9 @@ def load_gateway_settings(path: str | Path = "gateway-settings.toml") -> Gateway
 
 
 def load_gateway_auth(
-    path: str | Path = "gateway-auth.toml", *, required: bool = True
+    path: str | Path = "gateway-auth.toml", *, required: bool = False
 ) -> str | None:
-    """Read the pre-shared token from a separate gateway authentication file."""
+    """Read an optional pre-shared token from a gateway authentication file."""
 
     source = Path(path).expanduser().resolve()
     try:
@@ -229,7 +229,8 @@ def load_gateway_auth(
     if not isinstance(document, dict):
         raise GatewayConfigurationError("Gateway authentication must be a TOML document")
     _reject_unknown_keys(document, {"token"}, "authentication document root")
-    if not required and isinstance(document.get("token"), str) and not document["token"].strip():
+    token = document.get("token")
+    if token is None or (isinstance(token, str) and not token.strip()):
         return None
     return _string(document, "token")
 

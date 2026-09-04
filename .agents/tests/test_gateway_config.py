@@ -95,8 +95,11 @@ def test_distributed_gateway_templates_match_repository_copies() -> None:
     assert "instrument IP/hostname or complete VISA resource" in settings_template
     auth_template = (root / "gateway-auth.toml.template").read_text(encoding="utf-8")
     assert "[auth]" not in auth_template
+    assert "This file is optional" in auth_template
+    assert "Authentication is disabled" in auth_template
     assert "Any non-empty custom string is a valid token" in auth_template
     assert "secrets.token_urlsafe(32)" in auth_template
+    assert '# token = "replace-this-example-with-a-private-token"' in auth_template
 
 
 def test_socket_executor_always_uses_fixed_siglent_port(
@@ -206,22 +209,29 @@ def test_gateway_auth_loads_token(tmp_path: Path) -> None:
 
 
 def test_missing_optional_gateway_auth_means_no_authentication(tmp_path: Path) -> None:
-    assert config.load_gateway_auth(tmp_path / "missing.toml", required=False) is None
+    assert config.load_gateway_auth(tmp_path / "missing.toml") is None
 
 
-def test_empty_optional_gateway_auth_means_local_only(tmp_path: Path) -> None:
+def test_empty_optional_gateway_auth_means_no_authentication(tmp_path: Path) -> None:
     source = tmp_path / "gateway-auth.toml"
     source.write_text('token = ""\n', encoding="utf-8")
 
-    assert config.load_gateway_auth(source, required=False) is None
+    assert config.load_gateway_auth(source) is None
+
+
+def test_missing_token_field_means_no_authentication(tmp_path: Path) -> None:
+    source = tmp_path / "gateway-auth.toml"
+    source.write_text("# Authentication intentionally disabled.\n", encoding="utf-8")
+
+    assert config.load_gateway_auth(source) is None
 
 
 @pytest.mark.parametrize(
     "contents",
     [
-        'token = ""\n',
         'token = "secret"\nextra = true\n',
         '[auth]\ntoken = "secret"\n',
+        "token = true\n",
     ],
 )
 def test_gateway_auth_rejects_invalid_files(tmp_path: Path, contents: str) -> None:

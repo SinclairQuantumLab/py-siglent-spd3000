@@ -464,12 +464,17 @@ Keep every checkout updated from `main`; the connection handshake rejects incomp
 The source repository includes two safe-to-commit templates:
 
 - `gateway-settings.toml.template` describes the gateway listener and its physical instrument connection.
-- `gateway-auth.toml.template` contains the shape of the separate authentication file.
+- `gateway-auth.toml.template` shows the optional token-authentication file.
 
-On the gateway computer, run these commands from the cloned repository root to create editable copies:
+On the gateway computer, copy the required settings file from the cloned repository root:
 
 ```bash
 cp gateway-settings.toml.template gateway-settings.toml
+```
+
+To enable token authentication, also copy its template:
+
+```bash
 cp gateway-auth.toml.template gateway-auth.toml
 ```
 
@@ -495,7 +500,9 @@ Leave `gateway.port` omitted or commented out to use the default TCP port 8765.
 `connection = "socket"` uses the documented Siglent raw-SCPI port 5025, and the official network commands provide no port-setting operation, so it is intentionally fixed inside the driver rather than exposed in this file.
 Use `connection = "vxi11"` with the instrument hostname for VXI-11, or `connection = "visa"` with a VISA resource in `identifier` for USBTMC and SPD3303C.
 
-For access from another computer, also edit the generated `gateway-auth.toml`.
+Token authentication is optional regardless of the gateway bind address.
+If `gateway-auth.toml` is absent, or if the file has no non-empty `token` field, the gateway accepts connections without checking a token.
+To enable authentication, edit the generated `gateway-auth.toml` and set its `token` field.
 The token has no special format: any non-empty custom string is valid.
 Because anyone who knows this string can access the gateway, a long, random, hard-to-guess value is strongly recommended rather than a short manually chosen value.
 The following Python command is one convenient way to generate a recommended token, but it is only an example and is not required:
@@ -523,11 +530,14 @@ spd3000 gateway serve
 
 Use `--config <SETTINGS_PATH>` and `--auth <AUTH_PATH>` only when the files have different names or locations.
 If `--auth` is omitted, the server looks for `gateway-auth.toml` beside the settings file.
+If that default file is absent or contains no non-empty `token` field, token authentication remains disabled.
+An explicitly supplied `--auth <AUTH_PATH>` must exist so a misspelled or misplaced requested file is not silently ignored.
 Press `Ctrl+C` to stop the server.
 At startup, the server console shows a formatted summary of the configured physical connection and the manufacturer, model, serial number, and firmware returned by `*IDN?` so the operator can confirm the connected unit.
 It then logs accepted handshakes, each SCPI write/query or batch, completion time, and failures.
 While a batch is queued or executing, the server sends `queued` or `executing` heartbeat notifications often enough to keep a responsive gateway connection from reaching the client's inactivity timeout.
 The client consumes these notifications automatically and still returns only the completed batch results.
+The startup log states whether token authentication is enabled or disabled.
 Authentication tokens and ordinary command response bodies are never logged; the startup identity fields are the deliberate exception.
 The final console messages confirm that the listener stopped and the physical instrument connection closed.
 
@@ -536,7 +546,13 @@ The final console messages confirm that the listener stopped and the physical in
 ### Connect a client
 
 `<GATEWAY_HOST>` below means the IP address or hostname of the gateway computer, such as `192.168.50.20`; replace the whole placeholder, including the angle brackets.
-On a client computer containing its copy of `gateway-auth.toml`, test the connection with:
+Without token authentication, test the connection with:
+
+```bash
+spd3000 idn --gateway <GATEWAY_HOST>
+```
+
+When token authentication is enabled, securely copy `gateway-auth.toml` to the client computer and use:
 
 ```bash
 spd3000 idn --gateway <GATEWAY_HOST> --gateway-auth gateway-auth.toml
@@ -564,7 +580,8 @@ with spd.SPD3000.connect(
     psu.ch1.voltage = 5.0
 ```
 
-For a local-only setup, set `gateway.bind = "localhost"` and either leave the generated token empty or remove `gateway-auth.toml`.
+`load_gateway_auth()` returns `None` when the file is absent or has no non-empty `token` field, so the same Python example also works with authentication disabled.
+For a local-only setup, set `gateway.bind = "localhost"` and omit `gateway-auth.toml` unless authentication is still desired.
 `localhost` means the gateway accepts clients only from that same computer, so no token is required.
 
 ### Ports and firewall
@@ -573,7 +590,8 @@ The gateway listens on TCP port 8765 by default; it does not use the common web 
 Remote clients require an inbound firewall rule for TCP 8765 on the gateway computer, preferably restricted to the trusted client IP addresses.
 The gateway computer must also be allowed to reach an SPD3303X/X-E at TCP 5025 when `connection = "socket"` is used.
 If you change `gateway.port`, use the same value in the firewall rule and append it to the client identifier, for example `--gateway 192.168.50.20:3333` or `identifier="192.168.50.20:3333"`.
-A remotely accessible gateway uses token authentication, but the protocol is not encrypted, so use it only on a trusted network or carry it through a VPN, SSH tunnel, or TLS proxy.
+A remotely accessible gateway without a token accepts commands from every compatible client that can reach its TCP port, so disable authentication only on localhost or a network whose access controls you trust.
+Token authentication restricts clients but does not encrypt the protocol, so use a remotely accessible gateway only on a trusted network or carry it through a VPN, SSH tunnel, or TLS proxy.
 
 ## Model differences
 

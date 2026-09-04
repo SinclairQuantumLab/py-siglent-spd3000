@@ -220,6 +220,13 @@ def _run(args: argparse.Namespace) -> int:
         auth_path = args.auth or settings.source.with_name("gateway-auth.toml")
         token = load_gateway_auth(auth_path, required=args.auth is not None)
         logger = logging.getLogger(_GATEWAY_LOGGER_NAME)
+        if token is None:
+            logger.warning(
+                "gateway token authentication disabled; every compatible client that can reach "
+                "the listener can control the instrument"
+            )
+        else:
+            logger.info("gateway token authentication enabled")
         logger.info(
             "opening physical instrument connection: type=%s identifier=%s",
             settings.instrument.connection.value,

@@ -121,6 +121,7 @@ def test_gateway_serve_reports_physical_connection_and_identity(
         assert cli.main(["gateway", "serve"]) == 0
 
     messages = "\n".join(record.getMessage() for record in caplog.records)
+    assert "gateway token authentication disabled" in messages
     assert (
         "opening physical instrument connection: type=socket identifier=192.168.1.50"
         in messages
