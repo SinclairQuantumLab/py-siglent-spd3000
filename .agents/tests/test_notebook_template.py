@@ -67,6 +67,29 @@ def test_connection_settings_are_clear_and_connection_specific() -> None:
     assert "print(psu)" in settings
 
 
+def test_section_one_discovers_visa_resources_before_connecting() -> None:
+    notebook = _notebook()
+    discovery_index = next(
+        index
+        for index, cell in enumerate(notebook["cells"])
+        if "visa-discovery" in cell["metadata"].get("tags", [])
+    )
+    connection_index = next(
+        index
+        for index, cell in enumerate(notebook["cells"])
+        if "connection-settings" in cell["metadata"].get("tags", [])
+    )
+    discovery = "".join(notebook["cells"][discovery_index]["source"])
+
+    assert discovery_index + 1 == connection_index
+    assert 'pyvisa.ResourceManager("@py")' in discovery
+    assert "Use ResourceManager() instead" in discovery
+    assert ".list_resources()" in discovery
+    assert "USB0::0x0483::0x7540::SPD3XGB4150080::INSTR" in discovery
+    assert "TCPIP0::192.168.55.122::inst0::INSTR" in discovery
+    assert "serial number and IP address will differ" in discovery
+
+
 def test_notebook_template_is_linked_and_working_copy_is_ignored() -> None:
     root = Path(__file__).resolve().parents[2]
     readme = (root / "README.md").read_text(encoding="utf-8")
