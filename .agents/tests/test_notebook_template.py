@@ -67,7 +67,7 @@ def test_connection_settings_are_clear_and_connection_specific() -> None:
     assert "print(psu)" in settings
 
 
-def test_section_one_discovers_visa_resources_before_connecting() -> None:
+def test_section_one_places_optional_visa_discovery_after_connection() -> None:
     notebook = _notebook()
     discovery_index = next(
         index
@@ -81,7 +81,8 @@ def test_section_one_discovers_visa_resources_before_connecting() -> None:
     )
     discovery = "".join(notebook["cells"][discovery_index]["source"])
 
-    assert discovery_index + 1 == connection_index
+    assert connection_index + 1 == discovery_index
+    assert "For VISA only" in discovery
     assert 'pyvisa.ResourceManager("@py")' in discovery
     assert "Use ResourceManager() instead" in discovery
     assert ".list_resources()" in discovery

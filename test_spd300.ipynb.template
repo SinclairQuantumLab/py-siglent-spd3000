@@ -27,36 +27,11 @@
    "source": [
     "## 1. Connection settings\n",
     "\n",
-    "For VISA, run the discovery cell below first and copy the matching resource into `identifier`; otherwise skip that cell.\n",
-    "Then edit the `connect()` arguments in the connection cell for the connection being tested.\n",
+    "Edit the `connect()` arguments in the first code cell for the connection being tested.\n",
+    "An optional VISA resource-discovery cell follows it for users who need to find a USBTMC or VISA/VXI-11 resource string.\n",
     "Replace `<TYPE>` with a `spd.ConnectionType` member such as `SOCKET`, `VXI11`, `VISA`, or `GATEWAY`, and replace `<IDENTIFIER>` with its matching address or resource.\n",
     "Use a power-supply hostname or IP address for `SOCKET` and `VXI11`, a complete enumerated VISA resource for `VISA`, or `localhost`/`host[:port]` for `GATEWAY`.\n",
     "The two commented connection-specific arguments explain when to enable them; leave both commented for raw socket, VXI-11, system-default VISA, or an unauthenticated local gateway."
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {
-    "tags": [
-     "visa-discovery"
-    ]
-   },
-   "outputs": [],
-   "source": [
-    "# Run this cell only when finding an identifier for a VISA connection.\n",
-    "# Use ResourceManager() instead to search an installed system VISA backend such as NI-VISA.\n",
-    "import pyvisa\n",
-    "\n",
-    "visa_resource_manager = pyvisa.ResourceManager(\"@py\")\n",
-    "try:\n",
-    "    print(*visa_resource_manager.list_resources(), sep=\"\\n\")\n",
-    "finally:\n",
-    "    visa_resource_manager.close()\n",
-    "\n",
-    "# Typical output; the serial number and IP address will differ:\n",
-    "# USB0::0x0483::0x7540::SPD3XGB4150080::INSTR  (USB/USBTMC)\n",
-    "# TCPIP0::192.168.55.122::inst0::INSTR         (LAN/VXI-11 through VISA)"
    ]
   },
   {
@@ -91,6 +66,31 @@
     ")\n",
     "atexit.register(psu.close)\n",
     "print(psu)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "tags": [
+     "visa-discovery"
+    ]
+   },
+   "outputs": [],
+   "source": [
+    "# For VISA only: run this cell before the connection cell when you need to find its identifier.\n",
+    "# Use ResourceManager() instead to search an installed system VISA backend such as NI-VISA.\n",
+    "import pyvisa\n",
+    "\n",
+    "visa_resource_manager = pyvisa.ResourceManager(\"@py\")\n",
+    "try:\n",
+    "    print(*visa_resource_manager.list_resources(), sep=\"\\n\")\n",
+    "finally:\n",
+    "    visa_resource_manager.close()\n",
+    "\n",
+    "# Typical output; the serial number and IP address will differ:\n",
+    "# USB0::0x0483::0x7540::SPD3XGB4150080::INSTR  (USB/USBTMC)\n",
+    "# TCPIP0::192.168.55.122::inst0::INSTR         (LAN/VXI-11 through VISA)"
    ]
   },
   {
