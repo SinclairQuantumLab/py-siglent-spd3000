@@ -7,7 +7,9 @@ authors = [
     { name = "Sinclair Lab", email = "sinclairquantumlab@gmail.com" }
 ]
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "ipykernel>=7.3.0",
+]
 
 [project.optional-dependencies]
 driver = [
