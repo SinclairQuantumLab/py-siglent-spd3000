@@ -75,7 +75,7 @@
     "### 1.1 Optional VISA resource discovery\n",
     "\n",
     "Run this cell only when `ConnectionType.VISA` is selected and its complete resource identifier is not yet known.\n",
-    "The example searches PyVISA-py; change `ResourceManager(\"@py\")` to `ResourceManager()` to search an installed system VISA backend such as NI-VISA.\n",
+    "The example searches the installed system VISA backend such as NI-VISA; use `ResourceManager(\"@py\")` instead to force PyVISA-py.\n",
     "Copy the power supply resource into `identifier`; the code cell shows typical USB/USBTMC and LAN/VXI-11 formats, but the actual serial number or IP address will differ."
    ]
   },
@@ -90,10 +90,11 @@
    "outputs": [],
    "source": [
     "# For VISA only: run this cell before the connection cell when you need to find its identifier.\n",
-    "# Use ResourceManager() instead to search an installed system VISA backend such as NI-VISA.\n",
+    "# The active line searches system VISA; use the commented @py line to force PyVISA-py.\n",
     "import pyvisa\n",
     "\n",
-    "visa_resource_manager = pyvisa.ResourceManager(\"@py\")\n",
+    "visa_resource_manager = pyvisa.ResourceManager()  # system VISA backend\n",
+    "# visa_resource_manager = pyvisa.ResourceManager(\"@py\")  # PyVISA-py backend\n",
     "try:\n",
     "    print(*visa_resource_manager.list_resources(), sep=\"\\n\")\n",
     "finally:\n",

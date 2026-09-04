@@ -87,8 +87,12 @@ def test_section_one_places_optional_visa_discovery_after_connection() -> None:
     assert "Run this cell only when `ConnectionType.VISA` is selected" in guide
     assert "Copy the power supply resource into `identifier`" in guide
     assert "For VISA only" in discovery
-    assert 'pyvisa.ResourceManager("@py")' in discovery
-    assert "Use ResourceManager() instead" in discovery
+    assert "visa_resource_manager = pyvisa.ResourceManager()  # system VISA backend" in discovery
+    assert (
+        '# visa_resource_manager = pyvisa.ResourceManager("@py")  # PyVISA-py backend'
+        in discovery
+    )
+    assert "active line searches system VISA" in discovery
     assert ".list_resources()" in discovery
     assert "USB0::0x0483::0x7540::SPD3XGB4150080::INSTR" in discovery
     assert "TCPIP0::192.168.55.122::inst0::INSTR" in discovery
