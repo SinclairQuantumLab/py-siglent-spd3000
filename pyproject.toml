@@ -1,7 +1,7 @@
 [project]
 name = "py-siglent-spd3000"
 version = "0.1.0"
-description = "Python driver and optional gateway for Siglent SPD3000-series power supplies"
+description = "Python driver and centralized gateway for Siglent SPD3000-series power supplies"
 readme = "README.md"
 authors = [
     { name = "Sinclair Lab", email = "sinclairquantumlab@gmail.com" }
@@ -9,16 +9,6 @@ authors = [
 requires-python = ">=3.10"
 dependencies = [
     "ipykernel>=7.3.0",
-]
-
-[project.optional-dependencies]
-driver = [
-    "pyvisa>=1.16",
-    "pyvisa-py[usb]>=0.8",
-    "python-vxi11>=0.9",
-    "standard-xdrlib; python_version >= '3.13'",
-]
-gateway = [
     "pyvisa>=1.16",
     "pyvisa-py[usb]>=0.8",
     "python-vxi11>=0.9",

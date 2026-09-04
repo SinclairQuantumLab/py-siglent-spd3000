@@ -25,9 +25,8 @@ class VXI11Transport:
                     import vxi11  # type: ignore[import-untyped]
                 except ImportError as exc:
                     raise SPD3000ConnectionError(
-                        "python-vxi11 is required; install "
-                        "'py-siglent-spd3000[driver]' or "
-                        "'py-siglent-spd3000[gateway]'"
+                        "python-vxi11 is required but unavailable; "
+                        "reinstall py-siglent-spd3000 to restore its runtime dependencies"
                     ) from exc
                 self._instrument = vxi11.Instrument(host)
             else:

@@ -20,14 +20,16 @@ Use the Python import package name:
 siglent_spd3000
 ```
 
-The **driver is the core of the project**. The **gateway is an optional/add-on capability** distributed as part of the same project rather than a separate semantic implementation. A natural optional-extra form is:
+The **driver is the core of the project**. The **gateway is an included capability** distributed and installed as part of the same project rather than as a separate semantic implementation or package extra.
+All supported direct transports, the gateway client, and the gateway server are installed together by the default installation:
 
 ```bash
 pip install py-siglent-spd3000
-pip install "py-siglent-spd3000[gateway]"
 ```
 
-The name `py-siglent-spd3000` was chosen because it makes the Python implementation explicit while remaining broad enough to contain both the instrument driver and the optional gateway. Earlier candidate names such as `siglent-spd3000-driver`, `siglent-spd3000-library`, `siglent-spd3000-api`, and bare `siglent-spd3000` are not the current project name.
+Do not define or document `driver`, `gateway`, or transport-specific optional dependency extras.
+
+The name `py-siglent-spd3000` was chosen because it makes the Python implementation explicit while remaining broad enough to contain both the instrument driver and the included gateway. Earlier candidate names such as `siglent-spd3000-driver`, `siglent-spd3000-library`, `siglent-spd3000-api`, and bare `siglent-spd3000` are not the current project name.
 
 ### Precedence for the material below
 
@@ -36,8 +38,9 @@ This file joins two prior handoff documents **without shortening either one**.
 1. The **SPD3000 Driver + Gateway Architecture Handoff** is the current architecture decision record and takes precedence for architecture where the documents differ.
 2. The older **project/research context** remains fully included because it contains the device research, existing-library survey, communication-stack details, references, API ideas, testing ideas, and open questions that remain useful for implementation.
 3. The naming decision in this section supersedes older naming references below, especially references to `siglent-spd3000-driver` as the project/package name.
-4. In particular, the newer architecture distinguishes a command-level **Executor/Backend** abstraction from lower-level physical **Transport** mechanisms. Where the older research notes place responsibilities such as command spacing directly in `Transport`, follow the newer architecture unless implementation evidence gives a concrete reason to revisit it.
-5. Do not reinterpret the same-commit requirement into a stricter source-integrity mechanism. Client and gateway should simply require the same Git commit hash at session establishment. Dirty working trees are allowed; the developer is responsible for understanding local modifications.
+4. The unified default-installation decision in this section supersedes older packaging examples or discussion below that separate the driver, gateway, or transports into optional dependency extras.
+5. In particular, the newer architecture distinguishes a command-level **Executor/Backend** abstraction from lower-level physical **Transport** mechanisms. Where the older research notes place responsibilities such as command spacing directly in `Transport`, follow the newer architecture unless implementation evidence gives a concrete reason to revisit it.
+6. Do not reinterpret the same-commit requirement into a stricter source-integrity mechanism. Client and gateway should simply require the same Git commit hash at session establishment. Dirty working trees are allowed; the developer is responsible for understanding local modifications.
 
 ---
 
@@ -58,18 +61,20 @@ The intended architecture deliberately avoids turning the gateway into a second 
 
 Use one package/project, with conceptually distinct driver and gateway components.
 
-Suggested naming:
+Current naming:
 
-- Project/package: `siglent-spd3000-driver`
+- Project/distribution: `py-siglent-spd3000`
+- Python import package: `siglent_spd3000`
 - Driver: semantic Python instrument driver
 - Gateway: centralized remote execution service
 
-Possible packaging:
+Install all supported features together:
 
 ```bash
-pip install siglent-spd3000-driver
-pip install "siglent-spd3000-driver[gateway]"
+pip install py-siglent-spd3000
 ```
+
+The project does not expose separate `driver`, `gateway`, or transport extras.
 
 `driver` means an instrument driver, not an OS/kernel device driver. It owns the device-specific Python API and translates instrument operations into SCPI.
 

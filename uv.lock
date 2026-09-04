@@ -898,16 +898,6 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "ipykernel" },
-]
-
-[package.optional-dependencies]
-driver = [
-    { name = "python-vxi11" },
-    { name = "pyvisa" },
-    { name = "pyvisa-py", extra = ["usb"] },
-    { name = "standard-xdrlib", marker = "python_full_version >= '3.13'" },
-]
-gateway = [
     { name = "python-vxi11" },
     { name = "pyvisa" },
     { name = "pyvisa-py", extra = ["usb"] },
@@ -926,17 +916,12 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "ipykernel", specifier = ">=7.3.0" },
-    { name = "python-vxi11", marker = "extra == 'driver'", specifier = ">=0.9" },
-    { name = "python-vxi11", marker = "extra == 'gateway'", specifier = ">=0.9" },
-    { name = "pyvisa", marker = "extra == 'driver'", specifier = ">=1.16" },
-    { name = "pyvisa", marker = "extra == 'gateway'", specifier = ">=1.16" },
-    { name = "pyvisa-py", extras = ["usb"], marker = "extra == 'driver'", specifier = ">=0.8" },
-    { name = "pyvisa-py", extras = ["usb"], marker = "extra == 'gateway'", specifier = ">=0.8" },
-    { name = "standard-xdrlib", marker = "python_full_version >= '3.13' and extra == 'driver'" },
-    { name = "standard-xdrlib", marker = "python_full_version >= '3.13' and extra == 'gateway'" },
-    { name = "tomli", marker = "python_full_version < '3.11' and extra == 'gateway'", specifier = ">=2.2" },
+    { name = "python-vxi11", specifier = ">=0.9" },
+    { name = "pyvisa", specifier = ">=1.16" },
+    { name = "pyvisa-py", extras = ["usb"], specifier = ">=0.8" },
+    { name = "standard-xdrlib", marker = "python_full_version >= '3.13'" },
+    { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.2" },
 ]
-provides-extras = ["driver", "gateway"]
 
 [package.metadata.requires-dev]
 dev = [

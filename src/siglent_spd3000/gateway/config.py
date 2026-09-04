@@ -271,8 +271,8 @@ def _load_toml(stream: Any) -> dict[str, Any]:
             toml = import_module("tomli")
         except ModuleNotFoundError as exc:
             raise GatewayConfigurationError(
-                "TOML support on Python 3.10 requires the gateway extra; "
-                "install 'py-siglent-spd3000[gateway]'"
+                "TOML support on Python 3.10 requires tomli; "
+                "reinstall py-siglent-spd3000 to restore its runtime dependencies"
             ) from exc
     return cast(dict[str, Any], toml.load(stream))
 

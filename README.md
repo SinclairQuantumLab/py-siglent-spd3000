@@ -1,6 +1,6 @@
 # py-siglent-spd3000
 
-A synchronous Python driver and optional centralized gateway for Siglent SPD3303X, SPD3303X-E, and SPD3303C programmable DC power supplies.
+A synchronous Python driver with a centralized gateway for Siglent SPD3303X, SPD3303X-E, and SPD3303C programmable DC power supplies.
 Connecting through the [gateway server](#gateway-server) is the recommended way to share a supply because one server owns the physical connection, runs client requests one at a time, and enforces the required command spacing; simple one-process scripts can still connect directly through the same Python API.
 
 ## Table of contents
@@ -45,18 +45,15 @@ python -m venv .venv
 ```
 
 Activate the environment with `.venv\Scripts\Activate.ps1` in Windows PowerShell or `source .venv/bin/activate` on Linux and macOS.
-On the gateway computer and each computer that will connect to it, install the gateway extra:
+Install the project on every computer:
 
 ```bash
-python -m pip install -e ".[gateway]"
+python -m pip install -e .
 ```
 
-Use `python -m pip install -e ".[driver]"` on a computer that connects directly through USBTMC/VISA or VXI-11 without running or using the gateway.
-`driver` and `gateway` are the project's only optional extras.
-SPD3303C supports USBTMC only and therefore requires one of these extras on the computer physically connected to it.
+The single installation includes every supported connection method as well as the gateway client and server.
 
-> **NOTE:** If you use `uv`, run `uv sync --extra gateway --no-dev` after cloning instead of the virtual-environment and `pip` commands above.
-> Use `uv sync --extra driver --no-dev` for direct-only connections.
+> **NOTE:** If you use `uv`, the only installation command needed after cloning is `uv sync`; do not also run the `venv` or `pip install` commands.
 > Run project commands through that environment by prefixing them with `uv run`, for example `uv run spd3000 --help`.
 
 ## Basic use
@@ -122,12 +119,12 @@ with spd.SPD3000.connect(
 `SPD3000.connect(connection, identifier, ...)` separates the connection method from the address or resource that identifies its destination.
 Enum members such as `spd.ConnectionType.SOCKET` are recommended, while their lowercase string values remain accepted for short scripts.
 
-| `connection` | Physical and protocol path | `identifier` | Supported models and installation |
+| `connection` | Physical and protocol path | `identifier` | Supported models |
 | --- | --- | --- | --- |
-| `spd.ConnectionType.SOCKET` or `"socket"` | Ethernet using raw SCPI over TCP 5025 | Power supply hostname or IP address, such as `"192.168.1.50"` | SPD3303X/X-E; base package |
-| `spd.ConnectionType.VXI11` or `"vxi11"` | Ethernet using VXI-11 directly through `python-vxi11` | Power supply hostname or IP address | SPD3303X/X-E; `driver` extra |
-| `spd.ConnectionType.VISA` or `"visa"` | USBTMC over USB, or a VISA-managed Ethernet connection such as VXI-11 | Complete VISA resource reported on that computer, such as `"USB0::0x0483::0x7540::SPD3XGB4150080::INSTR"` or `"TCPIP0::192.168.55.122::inst0::INSTR"` | All models over USB; SPD3303X/X-E over Ethernet when supported by the selected VISA backend; `driver` extra |
-| `spd.ConnectionType.GATEWAY` or `"gateway"` | This package's gateway protocol over TCP, with the gateway owning the physical connection | `"localhost"` when the client and gateway run on the same computer; otherwise the gateway computer's hostname or IP address, such as `"192.168.50.20"`; append a non-default port as in `"192.168.50.20:3333"`; never use the power supply address | All supported models through a suitably connected gateway; `gateway` extra |
+| `spd.ConnectionType.SOCKET` or `"socket"` | Ethernet using raw SCPI over TCP 5025 | Power supply hostname or IP address, such as `"192.168.1.50"` | SPD3303X/X-E |
+| `spd.ConnectionType.VXI11` or `"vxi11"` | Ethernet using VXI-11 directly through `python-vxi11` | Power supply hostname or IP address | SPD3303X/X-E |
+| `spd.ConnectionType.VISA` or `"visa"` | USBTMC over USB, or a VISA-managed Ethernet connection such as VXI-11 | Complete VISA resource reported on that computer, such as `"USB0::0x0483::0x7540::SPD3XGB4150080::INSTR"` or `"TCPIP0::192.168.55.122::inst0::INSTR"` | All models over USB; SPD3303X/X-E over Ethernet when supported by the selected VISA backend |
+| `spd.ConnectionType.GATEWAY` or `"gateway"` | This package's gateway protocol over TCP, with the gateway owning the physical connection | `"localhost"` when the client and gateway run on the same computer; otherwise the gateway computer's hostname or IP address, such as `"192.168.50.20"`; append a non-default port as in `"192.168.50.20:3333"`; never use the power supply address | All supported models through a suitably connected gateway |
 
 Ordinary raw socket connections always use the instrument's documented TCP port 5025, while gateway connections use port 8765 by default.
 See [Gateway server](#gateway-server) for gateway configuration, authentication, and firewall requirements.
@@ -136,7 +133,7 @@ See [Gateway server](#gateway-server) for gateway configuration, authentication,
 
 A VISA `identifier` should be copied from the resources enumerated by the VISA backend on the computer that will control the instrument.
 Do not construct it from the operating-system name or copy another computer's resource blindly, because the backend, interface number, and instrument serial number can change the exact value.
-After installing the `driver` extra and connecting the instrument, PyVISA-py resources can be listed with:
+After installing the project and connecting the instrument, PyVISA-py resources can be listed with:
 
 ```bash
 python -c "import pyvisa; print(*pyvisa.ResourceManager('@py').list_resources(), sep='\n')"
@@ -459,7 +456,7 @@ The gateway computer is the computer physically connected to the supply or able 
 ### Install
 
 Follow [Installation](#installation) on the gateway computer and every client computer.
-Install the `gateway` extra on all of them and keep every checkout updated from `main`; the connection handshake rejects incompatible client and gateway builds automatically.
+Keep every checkout updated from `main`; the connection handshake rejects incompatible client and gateway builds automatically.
 
 ### Create the configuration files
 
@@ -600,7 +597,7 @@ Repository-internal tests live under `.agents/tests/`; pytest discovers them thr
 python -m venv .venv
 # Activate .venv using the command for your shell, then:
 python -m pip install --upgrade pip
-python -m pip install -e ".[driver,gateway]"
+python -m pip install -e .
 python -m pip install pytest pytest-cov ruff mypy
 python -m ruff check .
 python -m ruff format --check .

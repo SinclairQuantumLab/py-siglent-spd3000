@@ -1,4 +1,4 @@
-"""Optional centralized execution gateway."""
+"""Centralized execution gateway."""
 
 from .client import GatewayExecutor
 from .config import create_gateway_config_files, load_gateway_auth, load_gateway_settings

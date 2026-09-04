@@ -122,7 +122,11 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "Install a published build" not in readme
     assert "<VERSION>" not in readme
     assert "> **NOTE:** If you use `uv`" in readme
-    assert "uv sync --extra gateway --no-dev" in readme
+    assert "the only installation command needed after cloning is `uv sync`" in readme
+    assert "uv sync --extra" not in readme
+    assert '.[driver]' not in readme
+    assert '.[gateway]' not in readme
+    assert "--no-dev" not in readme
     assert "gateway-settings.toml.template" in readme
     assert "gateway-auth.toml.template" in readme
     assert "cp gateway-settings.toml.template gateway-settings.toml" in readme

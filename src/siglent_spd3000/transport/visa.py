@@ -8,7 +8,7 @@ from ..exceptions import SPD3000ConnectionError, SPD3000TimeoutError
 
 
 class VisaTransport:
-    """Physical transport using an optional PyVISA installation."""
+    """Physical transport using PyVISA."""
 
     def __init__(
         self,
@@ -27,9 +27,8 @@ class VisaTransport:
                     import pyvisa
                 except ImportError as exc:
                     raise SPD3000ConnectionError(
-                        "PyVISA is required; install "
-                        "'py-siglent-spd3000[driver]' or "
-                        "'py-siglent-spd3000[gateway]'"
+                        "PyVISA is required but unavailable; "
+                        "reinstall py-siglent-spd3000 to restore its runtime dependencies"
                     ) from exc
                 self._manager: Any = (
                     pyvisa.ResourceManager(backend) if backend else pyvisa.ResourceManager()
