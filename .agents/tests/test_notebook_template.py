@@ -80,8 +80,12 @@ def test_section_one_places_optional_visa_discovery_after_connection() -> None:
         if "connection-settings" in cell["metadata"].get("tags", [])
     )
     discovery = "".join(notebook["cells"][discovery_index]["source"])
+    guide = "".join(notebook["cells"][discovery_index - 1]["source"])
 
-    assert connection_index + 1 == discovery_index
+    assert connection_index + 2 == discovery_index
+    assert guide.startswith("### 1.1 Optional VISA resource discovery")
+    assert "Run this cell only when `ConnectionType.VISA` is selected" in guide
+    assert "Copy the power supply resource into `identifier`" in guide
     assert "For VISA only" in discovery
     assert 'pyvisa.ResourceManager("@py")' in discovery
     assert "Use ResourceManager() instead" in discovery

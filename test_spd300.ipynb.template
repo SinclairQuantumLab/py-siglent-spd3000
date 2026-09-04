@@ -69,6 +69,17 @@
    ]
   },
   {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "### 1.1 Optional VISA resource discovery\n",
+    "\n",
+    "Run this cell only when `ConnectionType.VISA` is selected and its complete resource identifier is not yet known.\n",
+    "The example searches PyVISA-py; change `ResourceManager(\"@py\")` to `ResourceManager()` to search an installed system VISA backend such as NI-VISA.\n",
+    "Copy the power supply resource into `identifier`; the code cell shows typical USB/USBTMC and LAN/VXI-11 formats, but the actual serial number or IP address will differ."
+   ]
+  },
+  {
    "cell_type": "code",
    "execution_count": null,
    "metadata": {
