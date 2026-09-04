@@ -53,19 +53,9 @@ python -m pip install -e ".[gateway]"
 ```
 
 Use `python -m pip install -e ".[driver]"` on a computer that connects directly through USBTMC/VISA or VXI-11 without running or using the gateway.
-To update an existing installation, run the following commands on the gateway computer and every client computer, then restart the gateway process and any long-running Python or Jupyter sessions:
 
-```bash
-git switch main
-git pull --ff-only origin main
-python -m pip install -e ".[gateway]"
-```
-
-Clone the repository independently on each computer instead of copying its source folder because the automatic compatibility handshake uses the checkout's Git metadata.
-If the handshake reports a version mismatch, update both sides from `main` again and restart them.
-
-> **NOTE:** `uv` is optional and does not replace Git.
-> After cloning or pulling the latest `main`, run `uv sync --extra gateway --no-dev` on the gateway computer and its clients, or `uv sync --extra driver --no-dev` on a computer that only connects directly.
+> **NOTE:** If you use `uv`, run `uv sync --extra gateway --no-dev` after cloning instead of the virtual-environment and `pip` commands above.
+> Use `uv sync --extra driver --no-dev` for direct-only connections.
 > Run project commands through that environment by prefixing them with `uv run`, for example `uv run spd3000 --help`.
 
 ### Install a published build

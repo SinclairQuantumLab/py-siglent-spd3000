@@ -114,11 +114,12 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
         "git clone https://github.com/SinclairQuantumLab/py-siglent-spd3000.git"
         in readme
     )
-    assert "git pull --ff-only origin main" in readme
+    assert "git switch main" not in readme
+    assert "git pull --ff-only origin main" not in readme
     assert "ordinary users do not need to find, copy, or compare commit hashes" in readme
     assert "git rev-parse HEAD" not in readme
     assert "<COMMIT_HASH>" not in readme
-    assert "> **NOTE:** `uv` is optional" in readme
+    assert "> **NOTE:** If you use `uv`" in readme
     assert "uv sync --extra gateway --no-dev" in readme
     assert "gateway-settings.toml.template" in readme
     assert "gateway-auth.toml.template" in readme
