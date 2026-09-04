@@ -99,6 +99,30 @@ def test_section_one_places_optional_visa_discovery_after_connection() -> None:
     assert "serial number and IP address will differ" in discovery
 
 
+def test_section_one_has_a_gateway_specific_connection_example() -> None:
+    notebook = _notebook()
+    discovery_index = next(
+        index
+        for index, cell in enumerate(notebook["cells"])
+        if "visa-discovery" in cell["metadata"].get("tags", [])
+    )
+    gateway_index = next(
+        index
+        for index, cell in enumerate(notebook["cells"])
+        if "gateway-connection" in cell["metadata"].get("tags", [])
+    )
+    guide = "".join(notebook["cells"][gateway_index - 1]["source"])
+    example = "".join(notebook["cells"][gateway_index]["source"])
+
+    assert discovery_index + 2 == gateway_index
+    assert guide.startswith("### 1.2 Connection through the gateway")
+    assert "Close any direct `psu` connection" in guide
+    assert "spd3000 gateway serve" in guide
+    assert "connection=spd.ConnectionType.GATEWAY" in example
+    assert 'identifier="localhost"' in example
+    assert 'token=spd.load_gateway_auth("gateway-auth.toml")' in example
+
+
 def test_notebook_template_is_linked_and_working_copy_is_ignored() -> None:
     root = Path(__file__).resolve().parents[2]
     readme = (root / "README.md").read_text(encoding="utf-8")
