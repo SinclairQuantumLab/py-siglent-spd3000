@@ -141,11 +141,17 @@ def test_gateway_section_has_a_simultaneous_multi_client_read_test() -> None:
     assert gateway_index + 2 == multi_client_index
     assert guide.startswith("#### 1.2.1 Multi-client read test")
     assert "read-only test" in guide
+    assert "reuses the gateway endpoint and execution settings" in guide
     assert "complete, non-interleaved batches" in guide
     assert "ThreadPoolExecutor(max_workers=2)" in example
     assert "Barrier(2)" in example
     assert "start_barrier.wait(timeout=10.0)" in example
     assert example.count("connection=spd.ConnectionType.GATEWAY") == 1
+    assert "identifier=psu.connection_identifier" in example
+    assert "timeout_s=psu.settings.timeout" in example
+    assert "min_command_interval_ms=psu.settings.min_command_interval * 1000.0" in example
+    assert "token=gateway_token" in example
+    assert 'identifier="localhost"' not in example
     assert "with client.batch() as responses:" in example
     assert "client.measure.voltage(spd.Channel.CH1)" in example
     assert "client.measure.current(spd.Channel.CH1)" in example
