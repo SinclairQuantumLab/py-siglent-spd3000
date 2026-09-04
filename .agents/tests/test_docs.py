@@ -119,6 +119,8 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "ordinary users do not need to find, copy, or compare commit hashes" in readme
     assert "git rev-parse HEAD" not in readme
     assert "<COMMIT_HASH>" not in readme
+    assert "Install a published build" not in readme
+    assert "<VERSION>" not in readme
     assert "> **NOTE:** If you use `uv`" in readme
     assert "uv sync --extra gateway --no-dev" in readme
     assert "gateway-settings.toml.template" in readme

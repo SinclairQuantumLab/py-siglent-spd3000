@@ -7,7 +7,6 @@ Connecting through the [gateway server](#gateway-server) is the recommended way 
 
 - [Installation](#installation)
   - [Install from a Git checkout](#install-from-a-git-checkout)
-  - [Install a published build](#install-a-published-build)
 - [Basic use](#basic-use)
 - [Connections](#connections)
   - [VISA resource identifiers](#visa-resource-identifiers)
@@ -53,28 +52,12 @@ python -m pip install -e ".[gateway]"
 ```
 
 Use `python -m pip install -e ".[driver]"` on a computer that connects directly through USBTMC/VISA or VXI-11 without running or using the gateway.
+`driver` and `gateway` are the project's only optional extras.
+SPD3303C supports USBTMC only and therefore requires one of these extras on the computer physically connected to it.
 
 > **NOTE:** If you use `uv`, run `uv sync --extra gateway --no-dev` after cloning instead of the virtual-environment and `pip` commands above.
 > Use `uv sync --extra driver --no-dev` for direct-only connections.
 > Run project commands through that environment by prefixing them with `uv run`, for example `uv run spd3000 --help`.
-
-### Install a published build
-
-When installing from a package index, install the exact same published version on the gateway computer and every client computer.
-Replace `<VERSION>` with one specific release number:
-
-```bash
-# Gateway computer
-python -m pip install "py-siglent-spd3000[gateway]==<VERSION>"
-
-# Gateway client computer
-python -m pip install "py-siglent-spd3000[gateway]==<VERSION>"
-```
-
-A built wheel contains the compatibility information used by the automatic handshake, so Git is not required at runtime when every computer installs the same build.
-The base package remains standard-library-only, while the `driver` extra installs direct USBTMC/VISA and VXI-11 support and the `gateway` extra installs the gateway's physical-connection dependencies plus a TOML compatibility parser for Python 3.10.
-These are the project's only two extras.
-SPD3303C supports USBTMC only and therefore requires one of these extras on the computer physically connected to it.
 
 ## Basic use
 
