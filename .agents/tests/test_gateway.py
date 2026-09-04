@@ -109,6 +109,12 @@ def test_gateway_logs_requests_without_exposing_authentication_token(
     assert "completed elapsed=" in messages
     assert "ping" in messages
     assert "session closed" in messages
+    assert (
+        "gateway stopping; closing listener and physical instrument connection"
+        in messages
+    )
+    assert "gateway stopped; physical instrument connection closed" in messages
+    assert physical.closed is True
     assert "private-token" not in messages
     assert "response-one" not in messages
     assert "response-two" not in messages

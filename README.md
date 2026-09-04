@@ -544,9 +544,10 @@ spd3000 gateway serve
 
 Use `--config <SETTINGS_PATH>` and `--auth <AUTH_PATH>` only when the files have different names or locations.
 If `--auth` is omitted, the server looks for `gateway-auth.toml` beside the settings file.
-The command keeps running until it is stopped.
+Press `Ctrl+C` to stop the server.
 The server console logs accepted handshakes, each SCPI write/query or batch, completion time, and failures.
 Authentication tokens and response bodies are never logged.
+The final console messages confirm that the listener stopped and the physical instrument connection closed.
 
 > **NOTE:** When installed with `uv`, run `uv run spd3000 gateway serve` instead.
 

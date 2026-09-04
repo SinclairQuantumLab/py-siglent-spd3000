@@ -269,8 +269,12 @@ class GatewayServer:
         self._server.shutdown()
 
     def close(self) -> None:
+        _LOGGER.info(
+            "gateway stopping; closing listener and physical instrument connection"
+        )
         self._server.server_close()
         self._owner.close()
+        _LOGGER.info("gateway stopped; physical instrument connection closed")
 
     def __enter__(self) -> GatewayServer:
         return self

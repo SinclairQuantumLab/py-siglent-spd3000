@@ -127,6 +127,7 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "spd3000 gateway serve" in readme
     assert "each SCPI write/query or batch" in readme
     assert "Authentication tokens and response bodies are never logged" in readme
+    assert "physical instrument connection closed" in readme
     assert "--gateway-auth gateway-auth.toml" in readme
     assert 'token = "replace-this-example-with-the-generated-private-token"' in readme
     assert "any non-empty custom string is valid" in readme

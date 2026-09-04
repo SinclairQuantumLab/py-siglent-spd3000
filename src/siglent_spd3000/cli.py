@@ -191,7 +191,7 @@ def _run(args: argparse.Namespace) -> int:
             )
             server.serve_forever()
         except KeyboardInterrupt:
-            pass
+            logging.getLogger(_GATEWAY_LOGGER_NAME).info("shutdown requested by Ctrl+C")
         finally:
             server.close()
         return 0
