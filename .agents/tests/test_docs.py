@@ -116,7 +116,9 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "uv sync --extra gateway --no-dev" in readme
     assert "gateway-settings.toml.template" in readme
     assert "gateway-auth.toml.template" in readme
-    assert "spd3000 gateway init" in readme
+    assert "cp gateway-settings.toml.template gateway-settings.toml" in readme
+    assert "cp gateway-auth.toml.template gateway-auth.toml" in readme
+    assert "spd3000 gateway init" not in readme
     assert "### Start the gateway" in readme
     assert "### Connect a client" in readme
     assert "### Ports and firewall" in readme

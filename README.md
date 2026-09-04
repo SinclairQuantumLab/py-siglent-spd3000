@@ -485,18 +485,18 @@ Install the `gateway` extra on all of them and verify that every installation re
 
 ### Create the configuration files
 
-The source repository and installed package include two safe-to-commit templates:
+The source repository includes two safe-to-commit templates:
 
 - `gateway-settings.toml.template` describes the gateway listener and its physical instrument connection.
 - `gateway-auth.toml.template` contains the shape of the separate authentication file.
 
-On the gateway computer, run the following command to create editable copies in the current directory:
+On the gateway computer, run these commands from the cloned repository root to create editable copies:
 
 ```bash
-spd3000 gateway init
+cp gateway-settings.toml.template gateway-settings.toml
+cp gateway-auth.toml.template gateway-auth.toml
 ```
 
-The command creates `gateway-settings.toml` and `gateway-auth.toml` from those templates and refuses to overwrite existing files.
 Edit `gateway-settings.toml` for the gateway computer and its power supply.
 For a typical network-connected SPD3303X/X-E, use settings like these:
 
