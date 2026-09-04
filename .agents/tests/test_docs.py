@@ -127,6 +127,8 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "spd3000 gateway serve" in readme
     assert "manufacturer, model, serial number, and firmware returned by `*IDN?`" in readme
     assert "each SCPI write/query or batch" in readme
+    assert "`queued` or `executing` heartbeat notifications" in readme
+    assert "client consumes these notifications automatically" in readme
     assert "Authentication tokens and ordinary command response bodies are never logged" in readme
     assert "startup identity fields are the deliberate exception" in readme
     assert "physical instrument connection closed" in readme

@@ -309,6 +309,7 @@ def test_notebook_stresses_gateway_batch_isolation_with_randomized_clients() -> 
 
     assert guide.startswith("### 8.4 Gateway multi-client batch isolation")
     assert "set voltage → set current → query voltage → query current" in guide
+    assert "gateway heartbeats keep its client connection alive" in guide
     assert "random durations shorter than `psu.settings.min_command_interval`" in guide
     assert "restores its original voltage, current, and output state" in guide
     assert "assert psu.connection_type is spd.ConnectionType.GATEWAY" in example

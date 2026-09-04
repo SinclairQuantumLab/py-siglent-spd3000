@@ -15,6 +15,7 @@ from .protocol import (
     MAX_MESSAGE_BYTES,
     decode_message,
     encode_message,
+    parse_heartbeat_notification,
     reconstruct_exception,
     serialize_command,
 )
@@ -95,14 +96,19 @@ class GatewayExecutor:
             }
             try:
                 self._stream.write(encode_message(request))
-                line = self._stream.readline(MAX_MESSAGE_BYTES + 2)
+                while True:
+                    line = self._stream.readline(MAX_MESSAGE_BYTES + 2)
+                    if not line:
+                        raise GatewayConnectionError("Gateway closed the connection")
+                    if len(line) > MAX_MESSAGE_BYTES + 1 or not line.endswith(b"\n"):
+                        raise GatewayProtocolError(
+                            "Gateway response exceeded limits or lacked LF"
+                        )
+                    response = decode_message(line[:-1])
+                    if parse_heartbeat_notification(response, request_id) is None:
+                        break
             except (OSError, ValueError) as exc:
                 raise GatewayConnectionError(f"Gateway request failed: {exc}") from exc
-            if not line:
-                raise GatewayConnectionError("Gateway closed the connection")
-            if len(line) > MAX_MESSAGE_BYTES + 1 or not line.endswith(b"\n"):
-                raise GatewayProtocolError("Gateway response exceeded limits or lacked LF")
-            response = decode_message(line[:-1])
             if response.get("id") != request_id:
                 raise GatewayProtocolError("Gateway response ID did not match the request")
             if "error" in response:

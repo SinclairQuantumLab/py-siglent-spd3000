@@ -6,10 +6,12 @@ import threading
 import time
 from collections import defaultdict, deque
 from collections.abc import Iterable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 
 import pytest
 
+import siglent_spd3000.gateway.client as gateway_client_module
 from siglent_spd3000 import (
     SPD3000,
     CommandBatch,
@@ -260,6 +262,57 @@ def test_concurrent_clients_cannot_interleave_batches() -> None:
         second.close()
 
     assert sorted(physical.batches) == [["A1", "A2"], ["B1", "B2"]]
+
+
+def test_gateway_heartbeats_keep_queued_and_executing_requests_alive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class SlowPhysical(PhysicalExecutor):
+        def execute(self, batch: CommandBatch) -> BatchResult:
+            self.batches.append([command.text for command in batch.commands])
+            time.sleep(0.35)
+            return BatchResult(tuple(None for _ in batch.commands))
+
+    heartbeat_states: list[str] = []
+    parse_heartbeat = gateway_client_module.parse_heartbeat_notification
+
+    def record_heartbeat(message: dict[str, object], request_id: object) -> str | None:
+        state = parse_heartbeat(message, request_id)
+        if state is not None:
+            heartbeat_states.append(state)
+        return state
+
+    monkeypatch.setattr(
+        gateway_client_module,
+        "parse_heartbeat_notification",
+        record_heartbeat,
+    )
+    physical = SlowPhysical()
+    settings = ExecutionSettings(0.01, timeout=0.2)
+    with running_server(physical) as server:
+        first = GatewayExecutor("127.0.0.1", port=server.port, settings=settings)
+        second = GatewayExecutor("127.0.0.1", port=server.port, settings=settings)
+        start = threading.Barrier(2)
+
+        def execute(executor: GatewayExecutor, command: str) -> tuple[str | None, ...]:
+            start.wait(timeout=2)
+            return executor.execute(CommandBatch([Write(command)])).values
+
+        try:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                futures = (
+                    pool.submit(execute, first, "A"),
+                    pool.submit(execute, second, "B"),
+                )
+                results = [future.result(timeout=3) for future in futures]
+        finally:
+            first.close()
+            second.close()
+
+    assert results == [(None,), (None,)]
+    assert sorted(physical.batches) == [["A"], ["B"]]
+    assert "queued" in heartbeat_states
+    assert "executing" in heartbeat_states
 
 
 def test_physical_owner_uses_larger_interval_at_session_transition() -> None:

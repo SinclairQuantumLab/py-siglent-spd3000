@@ -20,6 +20,8 @@ JSONRPC_VERSION = "2.0"
 MAX_MESSAGE_BYTES = 1024 * 1024
 MAX_BATCH_COMMANDS = 256
 MAX_COMMAND_BYTES = 4096
+HEARTBEAT_METHOD = "heartbeat"
+HEARTBEAT_STATES = frozenset(("queued", "executing"))
 
 
 def encode_message(message: dict[str, Any]) -> bytes:
@@ -46,6 +48,38 @@ def decode_message(data: bytes) -> dict[str, Any]:
     if not isinstance(message, dict) or message.get("jsonrpc") != JSONRPC_VERSION:
         raise GatewayProtocolError("Expected a JSON-RPC 2.0 object")
     return message
+
+
+def heartbeat_notification(request_id: object, state: str) -> dict[str, Any]:
+    """Build a JSON-RPC notification for one pending execute request."""
+
+    if state not in HEARTBEAT_STATES:
+        raise GatewayProtocolError(f"Unknown gateway heartbeat state: {state!r}")
+    return {
+        "jsonrpc": JSONRPC_VERSION,
+        "method": HEARTBEAT_METHOD,
+        "params": {"request_id": request_id, "state": state},
+    }
+
+
+def parse_heartbeat_notification(
+    message: dict[str, Any], expected_request_id: object
+) -> str | None:
+    """Return a validated heartbeat state, or ``None`` for a final response."""
+
+    if message.get("method") != HEARTBEAT_METHOD:
+        return None
+    if "id" in message:
+        raise GatewayProtocolError("Gateway heartbeat must be a JSON-RPC notification")
+    params = message.get("params")
+    if not isinstance(params, dict):
+        raise GatewayProtocolError("Gateway heartbeat params must be an object")
+    if params.get("request_id") != expected_request_id:
+        raise GatewayProtocolError("Gateway heartbeat request ID did not match the request")
+    state = params.get("state")
+    if not isinstance(state, str) or state not in HEARTBEAT_STATES:
+        raise GatewayProtocolError("Gateway heartbeat state was invalid")
+    return state
 
 
 def serialize_command(command: Command) -> dict[str, str]:

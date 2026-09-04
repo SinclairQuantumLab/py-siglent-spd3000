@@ -494,6 +494,7 @@
     "\n",
     "Run this write test only through the gateway and with CH1 isolated from sensitive hardware.\n",
     "Four independent clients wait on one barrier, sleep for different random durations shorter than `psu.settings.min_command_interval`, and then submit batches containing `set voltage → set current → query voltage → query current`.\n",
+    "While each request is queued or executing, gateway heartbeats keep its client connection alive without exposing intermediate values or changing batch isolation.\n",
     "The randomized arrivals scramble client order while keeping all submissions close together; every returned V/I pair must match the values set earlier in that same batch, which would not be reliable if commands from other clients were interleaved.\n",
     "The cell disables CH1 output before testing and restores its original voltage, current, and output state afterward."
    ]

@@ -31,10 +31,12 @@ from .protocol import (
     decode_message,
     deserialize_command,
     encode_message,
+    heartbeat_notification,
     serialize_exception,
 )
 
 _LOGGER = logging.getLogger(__name__)
+_MAX_HEARTBEAT_INTERVAL_S = 1.0
 
 
 @dataclass
@@ -45,6 +47,7 @@ class _Work:
     result: BatchResult | None = None
     error: BaseException | None = None
     remote_traceback: str = ""
+    state: str = "queued"
 
 
 class _PhysicalOwner:
@@ -66,10 +69,19 @@ class _PhysicalOwner:
         self._thread = threading.Thread(target=self._run, name="spd3000-owner", daemon=True)
         self._thread.start()
 
-    def execute(self, batch: CommandBatch, settings: ExecutionSettings) -> BatchResult:
+    def execute(
+        self,
+        batch: CommandBatch,
+        settings: ExecutionSettings,
+        *,
+        heartbeat: Callable[[str], None] | None = None,
+    ) -> BatchResult:
         work = _Work(batch, settings, threading.Event())
         self._queue.put(work)
-        work.done.wait()
+        heartbeat_interval = min(_MAX_HEARTBEAT_INTERVAL_S, settings.timeout / 2.0)
+        while not work.done.wait(heartbeat_interval):
+            if heartbeat is not None:
+                heartbeat(work.state)
         if work.error is not None:
             work.error.__dict__["gateway_remote_traceback"] = work.remote_traceback
             raise work.error
@@ -82,6 +94,7 @@ class _PhysicalOwner:
             work = self._queue.get()
             if work is None:
                 return
+            work.state = "executing"
             try:
                 if self._previous_interval is not None and self._last_completed_at is not None:
                     required = max(self._previous_interval, work.settings.min_command_interval)
@@ -152,12 +165,17 @@ class GatewayServer:
         session: _Session | None = None
         client = _client_label(handler.client_address)
         while True:
-            line = handler.rfile.readline(MAX_MESSAGE_BYTES + 2)
+            try:
+                line = handler.rfile.readline(MAX_MESSAGE_BYTES + 2)
+            except (ConnectionError, OSError, ValueError) as exc:
+                _LOGGER.info("client=%s disconnected: %s", client, exc)
+                return
             if not line:
                 return
             request_id: Any = None
             close_after = False
             method: Any = None
+            client_connected = True
             started_at = time.monotonic()
             try:
                 if len(line) > MAX_MESSAGE_BYTES + 1 or not line.endswith(b"\n"):
@@ -175,7 +193,33 @@ class GatewayServer:
                     result: Any = {"commit": self._commit}
                     _LOGGER.info("client=%s handshake accepted", client)
                 elif method == "execute":
-                    result = self._execute(params, session, client=client)
+                    def send_heartbeat(
+                        state: str, heartbeat_request_id: object = request_id
+                    ) -> None:
+                        nonlocal client_connected
+                        if not client_connected:
+                            return
+                        try:
+                            handler.wfile.write(
+                                encode_message(
+                                    heartbeat_notification(heartbeat_request_id, state)
+                                )
+                            )
+                        except (ConnectionError, OSError, ValueError) as exc:
+                            client_connected = False
+                            _LOGGER.info(
+                                "client=%s disconnected while %s: %s",
+                                client,
+                                state,
+                                exc,
+                            )
+
+                    result = self._execute(
+                        params,
+                        session,
+                        client=client,
+                        heartbeat=send_heartbeat,
+                    )
                     _LOGGER.info(
                         "client=%s completed elapsed=%.3fs",
                         client,
@@ -211,7 +255,13 @@ class GatewayServer:
                         "data": serialize_exception(exc, remote_traceback),
                     },
                 }
-            handler.wfile.write(encode_message(response))
+            if method == "execute" and not client_connected:
+                return
+            try:
+                handler.wfile.write(encode_message(response))
+            except (ConnectionError, OSError, ValueError) as exc:
+                _LOGGER.info("client=%s disconnected before response: %s", client, exc)
+                return
             if close_after:
                 return
 
@@ -246,6 +296,7 @@ class GatewayServer:
         session: _Session,
         *,
         client: str,
+        heartbeat: Callable[[str], None] | None = None,
     ) -> dict[str, Any]:
         commands = params.get("commands")
         if not isinstance(commands, list) or not commands:
@@ -255,7 +306,11 @@ class GatewayServer:
         batch = CommandBatch([deserialize_command(command) for command in commands])
         _log_batch(client, batch)
         try:
-            result = self._owner.execute(batch, session.settings)
+            result = self._owner.execute(
+                batch,
+                session.settings,
+                heartbeat=heartbeat,
+            )
         except BaseException as exc:
             remote_traceback = getattr(exc, "gateway_remote_traceback", traceback.format_exc())
             exc.__dict__["gateway_remote_traceback"] = remote_traceback
