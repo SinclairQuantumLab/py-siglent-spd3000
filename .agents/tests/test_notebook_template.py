@@ -288,6 +288,35 @@ def test_notebook_orders_control_verification_batching_and_diagnostics() -> None
     assert "    return psu.ch1.voltage, psu.measure.voltage" in decorated_verification
 
 
+def test_notebook_stresses_gateway_batch_isolation_with_randomized_clients() -> None:
+    notebook = _notebook()
+    example_index = next(
+        index
+        for index, cell in enumerate(notebook["cells"])
+        if "gateway-batch-isolation" in cell["metadata"].get("tags", [])
+    )
+    guide = "".join(notebook["cells"][example_index - 1]["source"])
+    example = "".join(notebook["cells"][example_index]["source"])
+
+    assert guide.startswith("### 8.4 Gateway multi-client batch isolation")
+    assert "set voltage → set current → query voltage → query current" in guide
+    assert "random durations shorter than `psu.settings.min_command_interval`" in guide
+    assert "restores its original voltage, current, and output state" in guide
+    assert "assert psu.connection_type is spd.ConnectionType.GATEWAY" in example
+    assert "Barrier(len(client_cases))" in example
+    assert "randomizer.uniform(0.0, psu.settings.min_command_interval * 0.9)" in example
+    assert "ThreadPoolExecutor(max_workers=len(scheduled_cases))" in example
+    assert "with client.batch() as responses:" in example
+    assert "client.ch1.voltage = voltage_v" in example
+    assert "client.ch1.current = current_a" in example
+    assert "assert read_voltage_v == voltage_v" in example
+    assert "assert read_current_a == current_a" in example
+    assert "psu.ch1.output = False" in example
+    assert "psu.ch1.voltage = original_voltage" in example
+    assert "psu.ch1.current = original_current" in example
+    assert "psu.ch1.output = original_output" in example
+
+
 def test_notebook_exercises_public_driver_paths_with_safety_guidance() -> None:
     notebook_text = json.dumps(_notebook())
 
