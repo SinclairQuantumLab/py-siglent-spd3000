@@ -280,8 +280,17 @@ def test_notebook_orders_control_verification_batching_and_diagnostics() -> None
         for index, cell in enumerate(notebook["cells"])
         if "".join(cell["source"]).startswith("### 8.3 Batch with write verification")
     )
-    decorated_verification = "".join(
+    decorated_verification_guide = "".join(
         notebook["cells"][verification_heading_index + 2]["source"]
+    )
+    assert decorated_verification_guide.startswith(
+        "The second cell demonstrates the same combination in decorator form."
+    )
+    assert "`@psu.batch` supplies the enclosing batch" in decorated_verification_guide
+    assert "ordinary `float` values" in decorated_verification_guide
+    assert "live measurement near 0 V is expected" in decorated_verification_guide
+    decorated_verification = "".join(
+        notebook["cells"][verification_heading_index + 3]["source"]
     )
     assert decorated_verification.startswith("@psu.batch\ndef configure_and_read():")
     assert "    with psu.verify_writes():" in decorated_verification

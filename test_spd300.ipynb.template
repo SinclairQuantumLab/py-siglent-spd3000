@@ -439,7 +439,7 @@
     "### 8.3 Batch with write verification\n",
     "\n",
     "Combining `psu.batch()` with `psu.verify_writes()` keeps writes and their readbacks in one batch.\n",
-    "The automatic readbacks perform verification but do not appear in `responses`; only the two explicit queries below are returned."
+    "In the first cell, the automatic readbacks perform verification but do not appear in `responses`; only the two explicit property queries are returned."
    ]
   },
   {
@@ -457,6 +457,16 @@
     "\n",
     "verified_voltage, verified_current_limit = responses\n",
     "print(verified_voltage, verified_current_limit)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "The second cell demonstrates the same combination in decorator form.\n",
+    "`@psu.batch` supplies the enclosing batch, while the nested `psu.verify_writes()` adds automatic readback only for the voltage write inside that context.\n",
+    "After the complete batch executes, the decorator resolves the returned voltage-setpoint and live-measurement queries into ordinary `float` values before returning them to the caller.\n",
+    "If CH1 output remains disabled, a 1.0 V setpoint together with a live measurement near 0 V is expected."
    ]
   },
   {
