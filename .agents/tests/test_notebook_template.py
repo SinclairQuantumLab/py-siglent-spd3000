@@ -123,6 +123,37 @@ def test_section_one_has_a_gateway_specific_connection_example() -> None:
     assert 'token=spd.load_gateway_auth("gateway-auth.toml")' in example
 
 
+def test_gateway_section_has_a_simultaneous_multi_client_read_test() -> None:
+    notebook = _notebook()
+    gateway_index = next(
+        index
+        for index, cell in enumerate(notebook["cells"])
+        if "gateway-connection" in cell["metadata"].get("tags", [])
+    )
+    multi_client_index = next(
+        index
+        for index, cell in enumerate(notebook["cells"])
+        if "gateway-multi-client" in cell["metadata"].get("tags", [])
+    )
+    guide = "".join(notebook["cells"][multi_client_index - 1]["source"])
+    example = "".join(notebook["cells"][multi_client_index]["source"])
+
+    assert gateway_index + 2 == multi_client_index
+    assert guide.startswith("#### 1.2.1 Multi-client read test")
+    assert "read-only test" in guide
+    assert "complete, non-interleaved batches" in guide
+    assert "ThreadPoolExecutor(max_workers=2)" in example
+    assert "Barrier(2)" in example
+    assert "start_barrier.wait(timeout=10.0)" in example
+    assert example.count("connection=spd.ConnectionType.GATEWAY") == 1
+    assert "with client.batch() as responses:" in example
+    assert "client.measure.voltage(spd.Channel.CH1)" in example
+    assert "client.measure.current(spd.Channel.CH1)" in example
+    assert ".voltage =" not in example
+    assert ".current =" not in example
+    assert ".output =" not in example
+
+
 def test_notebook_template_is_linked_and_working_copy_is_ignored() -> None:
     root = Path(__file__).resolve().parents[2]
     readme = (root / "README.md").read_text(encoding="utf-8")

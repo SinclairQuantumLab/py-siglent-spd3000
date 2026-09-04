@@ -133,9 +133,7 @@
    "outputs": [],
    "source": [
     "from __future__ import annotations\n",
-    "\n",
     "import atexit\n",
-    "\n",
     "import siglent_spd3000 as spd\n",
     "\n",
     "if \"psu\" in globals():\n",
@@ -151,6 +149,56 @@
     ")\n",
     "atexit.register(psu.close)\n",
     "print(psu)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "#### 1.2.1 Multi-client read test\n",
+    "\n",
+    "This read-only test opens two additional gateway clients and releases them together so both submit CH1 measurement batches at nearly the same time.\n",
+    "Each client sends voltage and current queries as one batch; the gateway console should show two client addresses and two complete, non-interleaved batches.\n",
+    "The batches may complete in either order, but this cell does not change any power-supply setting or output state."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "tags": [
+     "gateway-multi-client"
+    ]
+   },
+   "outputs": [],
+   "source": [
+    "from concurrent.futures import ThreadPoolExecutor, as_completed\n",
+    "from threading import Barrier\n",
+    "\n",
+    "start_barrier = Barrier(2)\n",
+    "\n",
+    "\n",
+    "def read_ch1_from_gateway(client_number: int) -> tuple[int, float, float]:\n",
+    "    with spd.SPD3000.connect(\n",
+    "        connection=spd.ConnectionType.GATEWAY,\n",
+    "        identifier=\"localhost\",  # gateway hostname or host[:port]\n",
+    "        timeout_s=5.0,\n",
+    "        min_command_interval_ms=100.0,\n",
+    "        token=spd.load_gateway_auth(\"gateway-auth.toml\"),\n",
+    "    ) as client:\n",
+    "        start_barrier.wait(timeout=10.0)\n",
+    "        with client.batch() as responses:\n",
+    "            client.measure.voltage(spd.Channel.CH1)\n",
+    "            client.measure.current(spd.Channel.CH1)\n",
+    "    voltage_v, current_a = responses\n",
+    "    return client_number, voltage_v, current_a\n",
+    "\n",
+    "\n",
+    "with ThreadPoolExecutor(max_workers=2) as pool:\n",
+    "    futures = [pool.submit(read_ch1_from_gateway, number) for number in (1, 2)]\n",
+    "    for future in as_completed(futures):\n",
+    "        client_number, voltage_v, current_a = future.result()\n",
+    "        print(f\"Client {client_number}: CH1 = {voltage_v} V, {current_a} A\")"
    ]
   },
   {
