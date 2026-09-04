@@ -106,6 +106,8 @@ Record every unexpected raw response before changing the parser or API.
 
 Observed on 2026-09-03: an SPD3303X running firmware `1.01.01.03.11R1` did not return an LF-terminated `*LOCK?` response before a 5-second timeout over raw TCP port 5025, while other queries in the same session succeeded.
 This is a hardware observation, not evidence that the vendor-documented command is universally unsupported.
+Observed on 2026-09-04: the same model and firmware returned `UNLOCK` for `*LOCK?` through a gateway backed by VXI-11.
+The driver therefore parses the observed `LOCK`/`UNLOCK` tokens as boolean states while retaining numeric response support.
 
 ## 9. Save and recall test
 

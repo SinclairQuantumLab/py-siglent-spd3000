@@ -194,6 +194,15 @@ def _parse_bool(command: str, response: str) -> bool:
     raise SPD3000ProtocolError(f"Malformed {command} response: {response!r}")
 
 
+def _parse_lock_state(response: str) -> bool:
+    normalized = response.strip().upper()
+    if normalized == "LOCK":
+        return True
+    if normalized == "UNLOCK":
+        return False
+    return _parse_bool("*LOCK?", response)
+
+
 def _parse_dhcp(response: str) -> bool:
     normalized = response.strip()
     if normalized.upper().startswith("DHCP:"):
@@ -1183,10 +1192,10 @@ class SPD3000:
 
     @property
     def locked(self) -> bool | Deferred[bool]:
-        """Fresh ``*LOCK?`` state; named differently because ``lock()`` is callable."""
+        """Fresh boolean ``*LOCK?`` state parsed from ``LOCK``/``UNLOCK`` or numeric forms."""
 
         self._require("lock_query", "*LOCK?")
-        return self._query("*LOCK?", lambda response: _parse_bool("*LOCK?", response))
+        return self._query("*LOCK?", _parse_lock_state)
 
     def sav(self, slot: int) -> None:
         """Execute canonical ``*SAV <slot>``."""
@@ -1218,9 +1227,7 @@ class SPD3000:
 
     def lock(self) -> None:
         if self.capabilities.lock_query:
-            verification = _Verification(
-                "*LOCK?", True, lambda response: _parse_bool("*LOCK?", response)
-            )
+            verification = _Verification("*LOCK?", True, _parse_lock_state)
             self._write("*LOCK", verification=verification)
         else:
             self._write(
@@ -1230,9 +1237,7 @@ class SPD3000:
 
     def unlock(self) -> None:
         if self.capabilities.lock_query:
-            verification = _Verification(
-                "*LOCK?", False, lambda response: _parse_bool("*LOCK?", response)
-            )
+            verification = _Verification("*LOCK?", False, _parse_lock_state)
             self._write("*UNLOCK", verification=verification)
         else:
             self._write(

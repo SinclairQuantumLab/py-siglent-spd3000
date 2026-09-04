@@ -918,7 +918,7 @@ def test_verify_supports_the_remaining_semantic_write_commands() -> None:
                 "MASKADDR?": ["255.255.255.0"],
                 "GATEADDR?": ["192.168.1.1"],
                 "DHCP?": ["DHCP:OFF"],
-                "*LOCK?": ["1", "0"],
+                "*LOCK?": ["LOCK", "UNLOCK"],
             },
         )
     )
@@ -938,6 +938,21 @@ def test_verify_supports_the_remaining_semantic_write_commands() -> None:
         psu.unlock()
 
     assert executor.batches[-1] == ["*UNLOCK", "*LOCK?"]
+
+
+def test_lock_query_accepts_device_words_and_numeric_forms() -> None:
+    executor = FakeExecutor(
+        responses_for(
+            "SPD3303X",
+            **{"*LOCK?": ["LOCK", "UNLOCK", "1", "0"]},
+        )
+    )
+    psu = SPD3000(executor)
+
+    assert psu.locked is True
+    assert psu.locked is False
+    assert psu.locked is True
+    assert psu.locked is False
 
 
 def test_verify_reports_memory_and_raw_writes_as_unverifiable_after_execution() -> None:

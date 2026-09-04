@@ -31,6 +31,7 @@ Hashes are SHA-256.
 
 The front-panel lock note documents the existence of `*LOCK?` on SPD3303X/X-E but does not define its response token, terminator, or transport/firmware limitations.
 Treat the package capability as documentation-derived and verify the query on each hardware configuration; the observed-device procedure is recorded in [`.agents/HARDWARE_TESTS.md`](../.agents/HARDWARE_TESTS.md).
+One tested SPD3303X returned `UNLOCK` through a VXI-11-backed gateway, so the driver accepts observed `LOCK`/`UNLOCK` tokens in addition to numeric forms and exposes the result as `psu.locked: bool`.
 
 ## Live vendor pages not archived as binaries
 

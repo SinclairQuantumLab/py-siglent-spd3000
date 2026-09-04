@@ -216,6 +216,7 @@ Friendly names are additive aliases which delegate to it; they do not contain se
     - `*LOCK` and `*UNLOCK` map directly to `psu.lock()` and `psu.unlock()`.
     - `*LOCK?` maps exceptionally to `psu.locked`.
       Python cannot expose `lock` as both a callable method and a boolean property.
+      The property converts observed `LOCK`/`UNLOCK` responses, as well as numeric forms, to `True`/`False`; a separate public enum would add no state beyond that boolean.
 - Network settings keep their SCPI-derived root properties and also provide grouped aliases under `psu.network`:
   - `psu.ipaddr` -> `psu.network.host`
   - `psu.maskaddr` -> `psu.network.subnet_mask`

@@ -30,6 +30,26 @@ def test_hardware_notebook_template_is_clean_and_well_formed() -> None:
             compile(source, f"notebook-cell-{index}", "exec")
 
 
+def test_notebook_keeps_shared_imports_separate_from_connection_settings() -> None:
+    notebook = _notebook()
+    import_cells = [
+        cell for cell in notebook["cells"] if "notebook-imports" in cell["metadata"].get("tags", [])
+    ]
+    settings_cell = next(
+        cell
+        for cell in notebook["cells"]
+        if "connection-settings" in cell["metadata"].get("tags", [])
+    )
+
+    assert len(import_cells) == 1
+    imports = "".join(import_cells[0]["source"])
+    settings = "".join(settings_cell["source"])
+    assert imports.startswith("# Imports used throughout this notebook\n")
+    assert "from __future__ import annotations\n\nimport atexit" in imports
+    assert "import siglent_spd3000 as spd" in imports
+    assert "import siglent_spd3000" not in settings
+
+
 def test_connection_placeholder_is_confined_to_connection_settings_cell() -> None:
     notebook = _notebook()
     placeholder_cells = [
@@ -236,9 +256,9 @@ def test_notebook_orders_control_verification_batching_and_diagnostics() -> None
     )
     output_off = "".join(notebook["cells"][basic_control_index + 2]["source"])
     assert output_off == (
+        "psu.ch1.output = False\n"
         "psu.ch1.voltage = 0\n"
         "psu.ch1.current = 0\n"
-        "psu.ch1.output = False\n"
         "\n"
         'print(f"CH1 set voltage: {psu.ch1.voltage} V, current: {psu.ch1.current} A, '
         'output: {psu.ch1.output}")'
@@ -359,7 +379,8 @@ def test_notebook_exercises_public_driver_paths_with_safety_guidance() -> None:
     assert "from decimal import Decimal" not in notebook_text
     assert "from dataclasses import asdict" not in notebook_text
     assert "from pprint import pprint" in notebook_text
-    assert "print(psu.idn); print()" in notebook_text
+    assert "print(identity)" in notebook_text
+    assert "print(psu.idn); print()" not in notebook_text
     assert "print(psu.capabilities)" in notebook_text
     assert "print(psu.settings)" in notebook_text
     assert "print(status)" in notebook_text
@@ -373,6 +394,8 @@ def test_notebook_exercises_public_driver_paths_with_safety_guidance() -> None:
     assert "asdict(" not in notebook_text
     assert "json.dumps" not in notebook_text
     assert "isolated from sensitive hardware" in notebook_text
+    assert "Any enabled output is highlighted without changing it." in notebook_text
+    assert "Warning: {channel.value} output is enabled." in notebook_text
     assert "psu.ch1.voltage = 1.0" in notebook_text
     assert "psu.ch1.current = 0.1" in notebook_text
     assert "psu.ch1.output = True" in notebook_text

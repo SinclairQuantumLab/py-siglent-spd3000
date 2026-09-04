@@ -22,6 +22,26 @@
    ]
   },
   {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {
+    "tags": [
+     "notebook-imports"
+    ]
+   },
+   "outputs": [],
+   "source": [
+    "# Imports used throughout this notebook\n",
+    "from __future__ import annotations\n",
+    "\n",
+    "import atexit\n",
+    "from pprint import pprint\n",
+    "from time import monotonic, sleep\n",
+    "\n",
+    "import siglent_spd3000 as spd"
+   ]
+  },
+  {
    "cell_type": "markdown",
    "metadata": {},
    "source": [
@@ -44,14 +64,6 @@
    },
    "outputs": [],
    "source": [
-    "from __future__ import annotations\n",
-    "\n",
-    "import atexit\n",
-    "from pprint import pprint\n",
-    "from time import monotonic, sleep\n",
-    "\n",
-    "import siglent_spd3000 as spd\n",
-    "\n",
     "if \"psu\" in globals():\n",
     "    psu.close()\n",
     "\n",
@@ -221,11 +233,13 @@
    "metadata": {},
    "outputs": [],
    "source": [
-    "\n",
     "identity = psu.idn\n",
-    "print(psu.idn); print()\n",
-    "print(psu.capabilities); print()\n",
-    "print(psu.settings); print()\n",
+    "print(identity)\n",
+    "print()\n",
+    "print(psu.capabilities)\n",
+    "print()\n",
+    "print(psu.settings)\n",
+    "print()\n",
     "\n",
     "assert identity.model is psu.model\n",
     "assert identity.raw == psu.scpi.query(\"*IDN?\")"
@@ -285,7 +299,8 @@
     "## 5. CH1 and CH2 read-only checks\n",
     "\n",
     "This cell compares programmed voltage/current properties with live measurements.\n",
-    "Power is queried only on models that advertise that capability."
+    "Power is queried only on models that advertise that capability.\n",
+    "Any enabled output is highlighted without changing it."
    ]
   },
   {
@@ -305,7 +320,9 @@
     "    }\n",
     "    if psu.capabilities.measure_power:\n",
     "        values[\"measured_power_w\"] = psu.measure.power(channel)\n",
-    "    pprint(values, sort_dicts=False)"
+    "    pprint(values, sort_dicts=False)\n",
+    "    if values[\"output\"]:\n",
+    "        print(f\"Warning: {channel.value} output is enabled.\")"
    ]
   },
   {
@@ -337,9 +354,9 @@
    "metadata": {},
    "outputs": [],
    "source": [
+    "psu.ch1.output = False\n",
     "psu.ch1.voltage = 0\n",
     "psu.ch1.current = 0\n",
-    "psu.ch1.output = False\n",
     "\n",
     "print(f\"CH1 set voltage: {psu.ch1.voltage} V, current: {psu.ch1.current} A, output: {psu.ch1.output}\")"
    ]
