@@ -110,8 +110,14 @@ def test_hardware_checklist_is_linked_and_has_stable_unique_ids() -> None:
 def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> None:
     readme = (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
     assert "[gateway server](#gateway-server) is the recommended way" in readme
-    assert "git clone <REPOSITORY_URL>" in readme
-    assert "git rev-parse HEAD" in readme
+    assert (
+        "git clone https://github.com/SinclairQuantumLab/py-siglent-spd3000.git"
+        in readme
+    )
+    assert "git pull --ff-only origin main" in readme
+    assert "ordinary users do not need to find, copy, or compare commit hashes" in readme
+    assert "git rev-parse HEAD" not in readme
+    assert "<COMMIT_HASH>" not in readme
     assert "> **NOTE:** `uv` is optional" in readme
     assert "uv sync --extra gateway --no-dev" in readme
     assert "gateway-settings.toml.template" in readme

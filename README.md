@@ -32,18 +32,16 @@ Connecting through the [gateway server](#gateway-server) is the recommended way 
 ## Installation
 
 Python 3.10 or newer is required.
-Gateway connections also require the gateway computer and every client computer to run code built from the exact same Git commit.
+For gateway use, keep the gateway computer and every client computer updated from this repository's `main` branch.
+The connection handshake checks compatibility automatically, so ordinary users do not need to find, copy, or compare commit hashes.
 
 ### Install from a Git checkout
 
 Install Python and Git on every computer, then run the following commands on the gateway computer and on each client computer.
-Replace `<REPOSITORY_URL>` with this repository's URL and `<COMMIT_HASH>` with the same agreed commit on every computer; do not type the angle brackets.
 
 ```bash
-git clone <REPOSITORY_URL>
+git clone https://github.com/SinclairQuantumLab/py-siglent-spd3000.git
 cd py-siglent-spd3000
-git checkout <COMMIT_HASH>
-git rev-parse HEAD
 python -m venv .venv
 ```
 
@@ -55,12 +53,19 @@ python -m pip install -e ".[gateway]"
 ```
 
 Use `python -m pip install -e ".[driver]"` on a computer that connects directly through USBTMC/VISA or VXI-11 without running or using the gateway.
-Compare the output of `git rev-parse HEAD` on every computer before starting the gateway; all hashes must be identical.
-Do not copy an editable source tree without its `.git` directory because the package would be unable to identify its commit and the gateway handshake would fail.
-Uncommitted local changes are allowed, but the person running them remains responsible for knowing that those changes are not represented by the commit hash.
+To update an existing installation, run the following commands on the gateway computer and every client computer, then restart the gateway process and any long-running Python or Jupyter sessions:
 
-> **NOTE:** `uv` is optional and does not replace Git or the same-commit requirement.
-> After cloning and checking out the selected commit, run `uv sync --extra gateway --no-dev` on the gateway computer and its clients, or `uv sync --extra driver --no-dev` on a computer that only connects directly.
+```bash
+git switch main
+git pull --ff-only origin main
+python -m pip install -e ".[gateway]"
+```
+
+Clone the repository independently on each computer instead of copying its source folder because the automatic compatibility handshake uses the checkout's Git metadata.
+If the handshake reports a version mismatch, update both sides from `main` again and restart them.
+
+> **NOTE:** `uv` is optional and does not replace Git.
+> After cloning or pulling the latest `main`, run `uv sync --extra gateway --no-dev` on the gateway computer and its clients, or `uv sync --extra driver --no-dev` on a computer that only connects directly.
 > Run project commands through that environment by prefixing them with `uv run`, for example `uv run spd3000 --help`.
 
 ### Install a published build
@@ -76,7 +81,7 @@ python -m pip install "py-siglent-spd3000[gateway]==<VERSION>"
 python -m pip install "py-siglent-spd3000[gateway]==<VERSION>"
 ```
 
-A built wheel contains its source commit, so Git is not required at runtime when every computer installs the same build.
+A built wheel contains the compatibility information used by the automatic handshake, so Git is not required at runtime when every computer installs the same build.
 The base package remains standard-library-only, while the `driver` extra installs direct USBTMC/VISA and VXI-11 support and the `gateway` extra installs the gateway's physical-connection dependencies plus a TOML compatibility parser for Python 3.10.
 These are the project's only two extras.
 SPD3303C supports USBTMC only and therefore requires one of these extras on the computer physically connected to it.
@@ -481,7 +486,7 @@ The gateway computer is the computer physically connected to the supply or able 
 ### Install
 
 Follow [Installation](#installation) on the gateway computer and every client computer.
-Install the `gateway` extra on all of them and verify that every installation reports the same Git commit.
+Install the `gateway` extra on all of them and keep every checkout updated from `main`; the connection handshake rejects incompatible client and gateway builds automatically.
 
 ### Create the configuration files
 
