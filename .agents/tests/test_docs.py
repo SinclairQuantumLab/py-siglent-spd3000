@@ -150,6 +150,9 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "any non-empty custom string is valid" in readme
     assert "only an example and is not required" in readme
     assert "# port = 8765 # default value" in readme
+    assert 'bind = "0.0.0.0"' in readme
+    assert "more conveniently, `0.0.0.0`" in readme
+    assert "never to `0.0.0.0`" in readme
     assert "omitted or commented out to use the default TCP port 8765" in readme
     assert "TCP port 8765" in readme
     assert "TCP 5025" in readme

@@ -1,8 +1,8 @@
 # Gateway listener and physical instrument settings for one power supply.
 
 [gateway]
-# Use "localhost" when clients run only on this computer.
-# For remote clients, use this computer's LAN address.
+# Use "localhost" for access from this computer only.
+# To allow access from other computers, use this computer's IP address or, more conveniently, "0.0.0.0".
 bind = "localhost"
 # port = 8765 # default value
 
