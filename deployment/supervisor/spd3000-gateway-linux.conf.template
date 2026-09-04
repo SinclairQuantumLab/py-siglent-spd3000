@@ -1,0 +1,20 @@
+; Supervisor config for the SPD3000 gateway on Linux.
+; Copy this file to $HOME/Projects/supervisor/conf.d/spd3000-gateway.conf.
+; This assumes this project is checked out at $HOME/Projects/py-siglent-spd3000.
+
+[program:spd3000-gateway]
+command=/usr/bin/env bash "%(ENV_HOME)s/Projects/py-siglent-spd3000/gateway-startup.sh"
+directory=%(ENV_HOME)s/Projects/py-siglent-spd3000
+process_name=%(program_name)s
+autostart=true
+startsecs=5
+startretries=5
+autorestart=unexpected
+stopsignal=INT
+stopwaitsecs=15
+stdout_logfile=%(here)s/logs/%(program_name)s_out.log
+stdout_logfile_maxbytes=2MB
+stdout_logfile_backups=2
+stderr_logfile=%(here)s/logs/%(program_name)s_err.log
+stderr_logfile_maxbytes=5MB
+stderr_logfile_backups=2

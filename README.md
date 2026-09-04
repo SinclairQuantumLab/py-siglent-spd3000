@@ -23,6 +23,7 @@ Connecting through the [gateway server](#gateway-server) is the recommended way 
   - [Install](#install)
   - [Create the configuration files](#create-the-configuration-files)
   - [Start the gateway](#start-the-gateway)
+  - [Run continuously with Supervisor](#run-continuously-with-supervisor)
   - [Connect a client](#connect-a-client)
   - [Ports and firewall](#ports-and-firewall)
 - [Model differences](#model-differences)
@@ -542,6 +543,32 @@ Authentication tokens and ordinary command response bodies are never logged; the
 The final console messages confirm that the listener stopped and the physical instrument connection closed.
 
 > **NOTE:** When installed with `uv`, run `uv run spd3000 gateway serve` instead.
+
+### Run continuously with Supervisor
+
+The repository includes [`gateway-startup.sh`](gateway-startup.sh) and [`gateway-startup.ps1`](gateway-startup.ps1), based on the `python/Startup.sh` and `python/Startup.ps1` patterns from the Sinclair Lab [Linux Supervisor](https://github.com/SinclairQuantumLab/supervisor-linux) and [Windows Supervisor](https://github.com/SinclairQuantumLab/supervisor-windows) repositories.
+Each launcher enters this repository, checks `.venv` and `gateway-settings.toml`, and runs the installed gateway module while returning its process result to Supervisor.
+Run `uv sync` and create `gateway-settings.toml` before registering either template.
+
+On Windows, copy the included app configuration into the existing Supervisor checkout:
+
+```powershell
+Copy-Item .\deployment\supervisor\spd3000-gateway-windows.conf.template "$HOME\Projects\supervisor\conf.d\spd3000-gateway.conf"
+supervisorctl -u "<SUPERVISOR_USERNAME>" -p "<SUPERVISOR_PASSWORD>" update
+supervisorctl -u "<SUPERVISOR_USERNAME>" -p "<SUPERVISOR_PASSWORD>" status spd3000-gateway
+```
+
+On Linux, copy the corresponding configuration and update Supervisor:
+
+```bash
+cp ./deployment/supervisor/spd3000-gateway-linux.conf.template "$HOME/Projects/supervisor/conf.d/spd3000-gateway.conf"
+supervisorctl update
+supervisorctl status spd3000-gateway
+```
+
+The templates assume this repository is installed at `$HOME/Projects/py-siglent-spd3000` on Linux or `%USERPROFILE%\Projects\py-siglent-spd3000` on Windows.
+Edit both `command` and `directory` in the copied Supervisor configuration when the checkout is elsewhere.
+Supervisor captures the gateway output in its `conf.d/logs/` directory and restarts an unexpectedly stopped gateway according to the template policy.
 
 ### Connect a client
 

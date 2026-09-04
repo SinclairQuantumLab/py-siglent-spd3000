@@ -133,6 +133,7 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "cp gateway-auth.toml.template gateway-auth.toml" in readme
     assert "spd3000 gateway init" not in readme
     assert "### Start the gateway" in readme
+    assert "### Run continuously with Supervisor" in readme
     assert "### Connect a client" in readme
     assert "### Ports and firewall" in readme
     assert "<GATEWAY_HOST>" in readme
@@ -146,6 +147,11 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "Authentication tokens and ordinary command response bodies are never logged" in readme
     assert "startup identity fields are the deliberate exception" in readme
     assert "physical instrument connection closed" in readme
+    assert "gateway-startup.sh" in readme
+    assert "gateway-startup.ps1" in readme
+    assert "spd3000-gateway-windows.conf.template" in readme
+    assert "spd3000-gateway-linux.conf.template" in readme
+    assert "supervisorctl status spd3000-gateway" in readme
     assert "--gateway-auth gateway-auth.toml" in readme
     assert 'token = "replace-this-example-with-the-generated-private-token"' in readme
     assert "any non-empty custom string is valid" in readme

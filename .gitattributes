@@ -1,1 +1,3 @@
 *.pdf binary
+*.sh text eol=lf
+deployment/supervisor/*-linux.conf.template text eol=lf
