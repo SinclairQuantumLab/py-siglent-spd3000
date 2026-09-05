@@ -166,18 +166,18 @@ The [official SIGLENT PyVISA discovery example](docs/Programming%20Example_%20Li
 
 ## Jupyter hardware test notebook
 
-[`test_spd300.ipynb.template`](test_spd300.ipynb.template) is the quickest guided check of this driver against a real SPD3000 Series power supply.
+[`test_spd3000.ipynb.template`](test_spd3000.ipynb.template) is the quickest guided check of this driver against a real SPD3000 Series power supply.
 Its annotated cells exercise the connection and representative instrument operations while reporting each step, making a firmware, transport, or individual-command failure easier to locate.
 The notebook itself explains the required connection inputs and safety confirmations; potentially state-changing tests remain opt-in and show their planned values first.
 
 Copy the template so connection details and saved outputs remain in the ignored working copy rather than entering Git history.
-If `test_spd300.ipynb` already exists, open that file and skip the copy command so its connection values and test record are not overwritten.
+If `test_spd3000.ipynb` already exists, open that file and skip the copy command so its connection values and test record are not overwritten.
 
 ```console
-cp test_spd300.ipynb.template test_spd300.ipynb
+cp test_spd3000.ipynb.template test_spd3000.ipynb
 ```
 
-Open `test_spd300.ipynb` in Visual Studio Code, use **Select Kernel** to choose the environment where this project is installed, and follow the notebook from top to bottom.
+Open `test_spd3000.ipynb` in Visual Studio Code, use **Select Kernel** to choose the environment where this project is installed, and follow the notebook from top to bottom.
 
 ## From a manual SCPI command to Python
 
@@ -533,7 +533,8 @@ Use `--config <SETTINGS_PATH>` and `--auth <AUTH_PATH>` only when the files have
 If `--auth` is omitted, the server looks for `gateway-auth.toml` beside the settings file.
 If that default file is absent or contains no non-empty `token` field, token authentication remains disabled.
 An explicitly supplied `--auth <AUTH_PATH>` must exist so a misspelled or misplaced requested file is not silently ignored.
-Press `Ctrl+C` to stop the server.
+Press `Ctrl+C` to stop an interactive server; the included Supervisor templates send `SIGINT` on Linux and a console break event on Windows, while the gateway also handles `SIGTERM` from other Linux process managers.
+These graceful-stop paths close the gateway listener and its physical instrument connection before the process exits.
 At startup, the server console shows a formatted summary of the configured physical connection and the manufacturer, model, serial number, and firmware returned by `*IDN?` so the operator can confirm the connected unit.
 It then logs accepted handshakes, each SCPI write/query or batch, completion time, and failures.
 While a batch is queued or executing, the server sends `queued` or `executing` heartbeat notifications often enough to keep a responsive gateway connection from reaching the client's inactivity timeout.
@@ -553,7 +554,7 @@ Run `uv sync` and create `gateway-settings.toml` before registering either templ
 On Windows, copy the included app configuration into the existing Supervisor checkout:
 
 ```powershell
-Copy-Item .\deployment\supervisor\spd3000-gateway-windows.conf.template "$HOME\Projects\supervisor\conf.d\spd3000-gateway.conf"
+Copy-Item .\deployment\supervisor\spd3000-gateway.conf.template.windows "$HOME\Projects\supervisor\conf.d\spd3000-gateway.conf"
 supervisorctl -u "<SUPERVISOR_USERNAME>" -p "<SUPERVISOR_PASSWORD>" update
 supervisorctl -u "<SUPERVISOR_USERNAME>" -p "<SUPERVISOR_PASSWORD>" status spd3000-gateway
 ```
@@ -561,7 +562,7 @@ supervisorctl -u "<SUPERVISOR_USERNAME>" -p "<SUPERVISOR_PASSWORD>" status spd30
 On Linux, copy the corresponding configuration and update Supervisor:
 
 ```bash
-cp ./deployment/supervisor/spd3000-gateway-linux.conf.template "$HOME/Projects/supervisor/conf.d/spd3000-gateway.conf"
+cp ./deployment/supervisor/spd3000-gateway.conf.template.linux "$HOME/Projects/supervisor/conf.d/spd3000-gateway.conf"
 supervisorctl update
 supervisorctl status spd3000-gateway
 ```

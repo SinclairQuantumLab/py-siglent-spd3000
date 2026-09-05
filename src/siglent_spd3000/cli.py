@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import signal
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -216,24 +217,33 @@ def _run(args: argparse.Namespace) -> int:
                 print(f"Created {created}")
             return 0
         _configure_gateway_request_logging()
-        settings = load_gateway_settings(args.config)
-        auth_path = args.auth or settings.source.with_name("gateway-auth.toml")
-        token = load_gateway_auth(auth_path, required=args.auth is not None)
         logger = logging.getLogger(_GATEWAY_LOGGER_NAME)
-        if token is None:
-            logger.warning(
-                "gateway token authentication disabled; every compatible client that can reach "
-                "the listener can control the instrument"
+        previous_sigterm_handler = signal.signal(signal.SIGTERM, signal.default_int_handler)
+        previous_sigbreak_handler = None
+        sigbreak = getattr(signal, "SIGBREAK", None)
+        if sigbreak is not None:
+            previous_sigbreak_handler = signal.signal(
+                sigbreak, signal.default_int_handler
             )
-        else:
-            logger.info("gateway token authentication enabled")
-        logger.info(
-            "opening physical instrument connection: type=%s identifier=%s",
-            settings.instrument.connection.value,
-            settings.instrument.identifier,
-        )
-        executor = settings.instrument.open_executor()
+        executor: Executor | None = None
+        server: GatewayServer | None = None
         try:
+            settings = load_gateway_settings(args.config)
+            auth_path = args.auth or settings.source.with_name("gateway-auth.toml")
+            token = load_gateway_auth(auth_path, required=args.auth is not None)
+            if token is None:
+                logger.warning(
+                    "gateway token authentication disabled; every compatible client that can "
+                    "reach the listener can control the instrument"
+                )
+            else:
+                logger.info("gateway token authentication enabled")
+            logger.info(
+                "opening physical instrument connection: type=%s identifier=%s",
+                settings.instrument.connection.value,
+                settings.instrument.identifier,
+            )
+            executor = settings.instrument.open_executor()
             identity = _identify_gateway_instrument(executor)
             logger.info(_gateway_instrument_summary(identity, settings.instrument))
             server = GatewayServer(
@@ -242,20 +252,25 @@ def _run(args: argparse.Namespace) -> int:
                 port=settings.port,
                 token=token,
             )
-        except Exception:
-            logger.info("gateway startup failed; closing physical instrument connection")
-            executor.close()
-            logger.info("physical instrument connection closed")
-            raise
-        try:
             print(
                 f"Serving SPD3000 gateway on {settings.bind}:{server.port} using {settings.source}"
             )
             server.serve_forever()
         except KeyboardInterrupt:
-            logger.info("shutdown requested by Ctrl+C")
+            logger.info("shutdown requested by Ctrl+C or termination signal")
+        except Exception:
+            if executor is not None and server is None:
+                logger.info("gateway startup failed; closing physical instrument connection")
+            raise
         finally:
-            server.close()
+            if server is not None:
+                server.close()
+            elif executor is not None:
+                executor.close()
+                logger.info("physical instrument connection closed")
+            signal.signal(signal.SIGTERM, previous_sigterm_handler)
+            if sigbreak is not None and previous_sigbreak_handler is not None:
+                signal.signal(sigbreak, previous_sigbreak_handler)
         return 0
 
     with _open_device(args) as psu:

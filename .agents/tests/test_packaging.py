@@ -20,4 +20,5 @@ def test_all_runtime_features_use_the_default_install() -> None:
         "python-vxi11>=0.9",
         "standard-xdrlib; python_version >= '3.13'",
         "tomli>=2.2; python_version < '3.11'",
+        "zeroconf>=0.151.3",
     }

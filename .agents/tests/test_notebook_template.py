@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _notebook() -> dict[str, Any]:
-    source = Path(__file__).resolve().parents[2] / "test_spd300.ipynb.template"
+    source = Path(__file__).resolve().parents[2] / "test_spd3000.ipynb.template"
     return json.loads(source.read_text(encoding="utf-8"))
 
 
@@ -186,8 +186,8 @@ def test_notebook_template_is_linked_and_working_copy_is_ignored() -> None:
     readme = (root / "README.md").read_text(encoding="utf-8")
     gitignore = (root / ".gitignore").read_text(encoding="utf-8").splitlines()
 
-    assert "[`test_spd300.ipynb.template`](test_spd300.ipynb.template)" in readme
-    assert "test_spd300.ipynb" in gitignore
+    assert "[`test_spd3000.ipynb.template`](test_spd3000.ipynb.template)" in readme
+    assert "test_spd3000.ipynb" in gitignore
 
 
 def test_notebook_demonstrates_manual_scpi_command_discovery() -> None:

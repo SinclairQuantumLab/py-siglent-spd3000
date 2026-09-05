@@ -149,8 +149,8 @@ def test_gateway_quick_guide_covers_recommendation_installation_and_use() -> Non
     assert "physical instrument connection closed" in readme
     assert "gateway-startup.sh" in readme
     assert "gateway-startup.ps1" in readme
-    assert "spd3000-gateway-windows.conf.template" in readme
-    assert "spd3000-gateway-linux.conf.template" in readme
+    assert "spd3000-gateway.conf.template.windows" in readme
+    assert "spd3000-gateway.conf.template.linux" in readme
     assert "supervisorctl status spd3000-gateway" in readme
     assert "--gateway-auth gateway-auth.toml" in readme
     assert 'token = "replace-this-example-with-the-generated-private-token"' in readme
@@ -232,8 +232,8 @@ def test_jupyter_hardware_test_guide_is_a_concise_pitch_and_launch_path() -> Non
     )[0]
 
     for required in (
-        "test_spd300.ipynb.template",
-        "cp test_spd300.ipynb.template test_spd300.ipynb",
+        "test_spd3000.ipynb.template",
+        "cp test_spd3000.ipynb.template test_spd3000.ipynb",
         "Visual Studio Code",
         "Select Kernel",
         "quickest guided check",

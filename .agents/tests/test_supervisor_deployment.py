@@ -34,10 +34,10 @@ def test_windows_gateway_launcher_is_repo_aware_and_returns_exit_code() -> None:
 
 def test_supervisor_templates_follow_the_existing_platform_conventions() -> None:
     linux = (
-        ROOT / "deployment/supervisor/spd3000-gateway-linux.conf.template"
+        ROOT / "deployment/supervisor/spd3000-gateway.conf.template.linux"
     ).read_text(encoding="utf-8")
     windows = (
-        ROOT / "deployment/supervisor/spd3000-gateway-windows.conf.template"
+        ROOT / "deployment/supervisor/spd3000-gateway.conf.template.windows"
     ).read_text(encoding="utf-8")
 
     for config in (linux, windows):
@@ -58,3 +58,5 @@ def test_supervisor_templates_follow_the_existing_platform_conventions() -> None
         "%(ENV_USERPROFILE)s\\Projects\\py-siglent-spd3000\\gateway-startup.ps1"
         in windows
     )
+    assert "stopsignal=CTRL_BREAK_EVENT" in windows
+    assert "stopwaitsecs=15" in windows

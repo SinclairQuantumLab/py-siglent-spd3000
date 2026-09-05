@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import signal
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -142,7 +143,39 @@ def test_gateway_serve_reports_physical_connection_and_identity(
         "  - Minimum command interval: 100 ms"
         in messages
     )
-    assert "shutdown requested by Ctrl+C" in messages
+    assert "shutdown requested by Ctrl+C or termination signal" in messages
     assert executor.commands == ["*IDN?"]
     assert executor.closed is True
     assert "Serving SPD3000 gateway on localhost:8765" in capsys.readouterr().out
+
+
+def test_gateway_serve_installs_and_restores_termination_handlers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installed: list[tuple[object, object]] = []
+    original_sigterm_handler = object()
+    original_sigbreak_handler = object()
+
+    def fake_signal(signum: object, handler: object) -> object:
+        installed.append((signum, handler))
+        if signum == signal.SIGTERM:
+            return original_sigterm_handler
+        return original_sigbreak_handler
+
+    monkeypatch.setattr(cli.signal, "signal", fake_signal)
+    monkeypatch.setattr(cli, "_configure_gateway_request_logging", lambda: None)
+
+    def interrupt_settings_load(_path: Path) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "load_gateway_settings", interrupt_settings_load)
+
+    assert cli.main(["gateway", "serve"]) == 0
+    assert installed[0] == (signal.SIGTERM, signal.default_int_handler)
+    sigbreak = getattr(signal, "SIGBREAK", None)
+    if sigbreak is not None:
+        assert installed[1] == (sigbreak, signal.default_int_handler)
+        assert installed[-2] == (signal.SIGTERM, original_sigterm_handler)
+        assert installed[-1] == (sigbreak, original_sigbreak_handler)
+    else:
+        assert installed[-1] == (signal.SIGTERM, original_sigterm_handler)

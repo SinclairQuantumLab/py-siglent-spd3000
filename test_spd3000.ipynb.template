@@ -6,7 +6,7 @@
    "source": [
     "# SPD3000 guided hardware test\n",
     "\n",
-    "Copy this file to `test_spd300.ipynb`, select the Python environment containing this checkout, and run the cells in order.\n",
+    "Copy this file to `test_spd3000.ipynb`, select the Python environment containing this checkout, and run the cells in order.\n",
     "The notebook imports the installed `siglent_spd3000` package, so its results exercise the actual driver implementation rather than a duplicate test script.\n",
     "Read-only cells come first, followed by direct hardware-control tests.\n",
     "The complete acceptance procedure remains in [`.agents/HARDWARE_TESTS.md`](.agents/HARDWARE_TESTS.md)."

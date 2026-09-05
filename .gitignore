@@ -11,4 +11,4 @@ dist/
 src/siglent_spd3000/_build_commit.py
 gateway-settings.toml
 gateway-auth.toml
-test_spd300.ipynb
+test_spd3000.ipynb
